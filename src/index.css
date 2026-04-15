@@ -1,0 +1,19 @@
+*, *::before, *::after { box-sizing: border-box; }
+:root {
+  --bg-deep: #0d0d1a;
+  --bg-card: #12121f;
+  --bg-hover: #1a1a2e;
+  --text-primary: #e8e8f0;
+  --text-dim: #8888aa;
+  --text-accent: #c084fc;
+  --text-danger: #f87171;
+  --text-warning: #fbbf24;
+  --border: #2a2a40;
+  --btn-bg: #1e1e35;
+  --btn-hover: #2a2a4a;
+  --btn-active: #3a2a5a;
+  font-family: 'Georgia', 'Times New Roman', serif;
+}
+html, body { margin: 0; padding: 0; height: 100%; }
+body { background: var(--bg-deep); color: var(--text-primary); min-height: 100vh; line-height: 1.6; }
+#root { min-height: 100vh; display: flex; flex-direction: column; }

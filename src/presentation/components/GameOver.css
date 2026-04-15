@@ -1,0 +1,10 @@
+.end-screen { min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 2rem; gap: 1rem; }
+.end-icon { font-size: 4rem; margin-bottom: 0.5rem; }
+.game-over .end-icon { color: var(--text-danger); }
+.victory .end-icon { color: var(--text-warning); }
+.game-over h1 { color: var(--text-danger); margin: 0; }
+.victory h1 { color: var(--text-warning); margin: 0; }
+.end-screen p { color: var(--text-dim); max-width: 400px; line-height: 1.6; margin: 0; }
+.end-hint { font-style: italic; font-size: 0.9rem; }
+.restart-btn { margin-top: 1rem; background: var(--btn-bg); border: 1px solid var(--border); border-radius: 6px; color: var(--text-primary); padding: 0.875rem 1.5rem; cursor: pointer; font-size: 1rem; font-family: inherit; transition: background 0.15s; }
+.restart-btn:hover { background: var(--btn-hover); }

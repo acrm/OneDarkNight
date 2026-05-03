@@ -9,6 +9,8 @@ interface GameStore extends GameState {
   restart: () => void;
 }
 
+const normalizeInventory = (items: string[]): string[] => [...new Set(items)];
+
 const clampThreatLevel = (value: number): number => Math.max(0, Math.min(3, value));
 
 const toThreatStage = (threatLevel: number): ThreatStage => {
@@ -44,11 +46,12 @@ export const useGameStore = create<GameStore>()(
         if (!scene) return;
         const choice = scene.choices.find((c) => c.id === choiceId);
         if (!choice) return;
-        if (choice.requireItem && !state.inventory.includes(choice.requireItem)) return;
+        const normalizedInventory = normalizeInventory(state.inventory);
+        if (choice.requireItem && !normalizedInventory.includes(choice.requireItem)) return;
         if (choice.requireFlag && !state.flags[choice.requireFlag]) return;
         if (choice.requireNotFlag && state.flags[choice.requireNotFlag]) return;
-        let newInventory = [...state.inventory];
-        if (choice.addItems) newInventory = [...newInventory, ...choice.addItems];
+        let newInventory = [...normalizedInventory];
+        if (choice.addItems) newInventory = normalizeInventory([...newInventory, ...choice.addItems]);
         if (choice.removeItems) newInventory = newInventory.filter((i) => !choice.removeItems!.includes(i));
 
         const newFlags = { ...state.flags, ...(choice.setFlags ?? {}) };

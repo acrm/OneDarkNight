@@ -15,7 +15,7 @@ export const day3Scenes: Scene[] = [
         text: 'Посмотреть в глазок',
         nextSceneId: 'd3_peephole',
         consequenceType: 'instant-fatal',
-        consequenceNote: 'Ночное правило глазка нарушено.',
+        consequenceNote: 'Опасный выбор у входной двери стоил тебе слишком дорого.',
       },
       { id: 'c2', text: 'Использовать соль у двери', nextSceneId: 'd3_use_salt', requireItem: 'соль' },
       { id: 'c3', text: 'Разбудить родителей', nextSceneId: 'd3_wake_parents' },
@@ -24,7 +24,7 @@ export const day3Scenes: Scene[] = [
         text: 'Попробовать открыть дверь и выйти',
         nextSceneId: 'd3_blocked_door',
         consequenceType: 'escalation',
-        consequenceNote: 'С 02:00 до 03:00 дверь блокируется и это злит сущность.',
+        consequenceNote: 'Попытка силой прорваться наружу усилила напряжение в доме.',
         threatDelta: 1,
       },
     ],
@@ -58,7 +58,7 @@ export const day3Scenes: Scene[] = [
     roomId: 'hallway', nearbyRooms: ['parents-bedroom', 'living-room'],
     text: ['— Кто-то стучит. — Ночью? Наверное, сосед. Схожу открою. — Папа встаёт.'],
     choices: [
-      { id: 'c1', text: 'Остановить — использовать соль', nextSceneId: 'd3_use_salt', requireItem: 'соль' },
+      { id: 'c1', text: 'Резко остановить его', nextSceneId: 'd3_use_salt', requireItem: 'соль' },
       { id: 'c2', text: 'Позволить открыть дверь', nextSceneId: 'd3_dad_opens' },
       { id: 'c3', text: 'Остановить словами', nextSceneId: 'd3_stop_no_salt' },
     ],
@@ -90,7 +90,7 @@ export const day3Scenes: Scene[] = [
     ],
     choices: [
       { id: 'c1', text: 'Вернуться спать', nextSceneId: 'd3_after_salt', removeItems: ['соль'] },
-      { id: 'c2', text: 'Проверить гостиную и телевизор', nextSceneId: 'd3_tv_breach_intro', setFlags: { checked_tv_after_knock: true } },
+      { id: 'c2', text: 'Проверить гостиную и телевизор', nextSceneId: 'd3_tv_breach_intro', setFlags: { checked_tv_after_knock: true }, removeItems: ['соль'] },
     ],
   },
   {
@@ -108,7 +108,7 @@ export const day3Scenes: Scene[] = [
     choices: [
       {
         id: 'c1',
-        text: 'Спрятаться и переждать, не трогая телевизор',
+        text: 'Спрятаться и переждать',
         nextSceneId: 'd3_tv_breach_survive',
         setFlags: { survived_entity_breach: true },
       },
@@ -117,7 +117,7 @@ export const day3Scenes: Scene[] = [
         text: 'Попытаться выключить телевизор',
         nextSceneId: 'd3_tv_breach_fail',
         consequenceType: 'instant-fatal',
-        consequenceNote: 'Повторное нарушение ТВ-правила во время прорыва сущности.',
+        consequenceNote: 'Вмешательство в разгар прорыва оказалось фатальным.',
       },
     ],
   },
@@ -147,7 +147,7 @@ export const day3Scenes: Scene[] = [
   {
     id: 'd3_after_salt', day: 3, time: 'night', icon: 'fa-moon', location: 'Спальня',
     roomId: 'parents-bedroom', nearbyRooms: ['hallway'],
-    text: ['Правила работают. Ты засыпаешь только под утро.'],
+    text: ['Стук больше не возвращается. Ты засыпаешь только под утро.'],
     choices: [{ id: 'c1', text: 'Следующий день →', nextSceneId: 'd4_start' }],
   },
 ];

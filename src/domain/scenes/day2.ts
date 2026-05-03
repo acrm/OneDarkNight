@@ -66,7 +66,7 @@ export const day2Scenes: Scene[] = [
     roomId: 'hallway', nearbyRooms: ['kitchen'],
     text: [
       'В магазине снова тот мужчина с браслетом.',
-      '— Сегодня ночью будет не только стук. Помни: соль. И не трогай телевизор, если он начнёт мигать.',
+      '— Сегодня ночью будет не только стук. Будь внимателен к мелочам.',
     ],
     choices: [
       { id: 'c1', text: 'Купить молоко, соль и еду', nextSceneId: 'd2_buy_both', addItems: ['молоко', 'соль', 'еда'] },
@@ -114,12 +114,12 @@ export const day2Scenes: Scene[] = [
     text: [
       'В 00:40 телевизор включается сам.',
       'Помехи превращаются в рваные кадры чьей-то квартиры. Камера как будто медленно движется по твоему дому.',
-      'Правило всплывает в голове: не выключать телевизор во время хоррор-сигнала.',
+      'Пальцы сами тянутся к пульту, но ты не уверен, что это хорошая идея.',
     ],
     choices: [
       {
         id: 'c1',
-        text: 'Не трогать телевизор и переждать',
+        text: 'Замереть и ждать',
         nextSceneId: 'd2_tv_survive',
         setFlags: { tv_waited_once: true },
       },
@@ -129,7 +129,7 @@ export const day2Scenes: Scene[] = [
         nextSceneId: 'd2_tv_break_rule',
         setFlags: { tv_rule_broken: true },
         consequenceType: 'escalation',
-        consequenceNote: 'Нарушение ТВ-правила усилило угрозу в доме.',
+        consequenceNote: 'Ночной сигнал усилил угрозу в доме.',
         threatDelta: 1,
         doomDelta: 1,
       },

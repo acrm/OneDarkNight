@@ -110,7 +110,7 @@ export const day4Scenes: Scene[] = [
     roomId: 'bathroom', nearbyRooms: ['hallway'],
     text: [
       'Свет мерцает. В зеркале виден только тёмный силуэт у тебя за спиной.',
-      'Ты помнишь правило: около 02:30 в зеркало смотреть нельзя.',
+      'На секунду кажется, что силуэт ждёт именно твоего взгляда.',
     ],
     choices: [
       {
@@ -119,7 +119,7 @@ export const day4Scenes: Scene[] = [
         nextSceneId: 'd4_mirror_marked',
         setFlags: { mirror_rule_broken: true },
         consequenceType: 'deferred-fatal',
-        consequenceNote: 'Нарушение зеркального правила запускает отложенный фатальный сценарий.',
+        consequenceNote: 'Странная встреча с отражением запускает отложенную расплату.',
         threatDelta: 1,
         doomDelta: 1,
       },
@@ -135,7 +135,7 @@ export const day4Scenes: Scene[] = [
         requireItem: 'соль',
         removeItems: ['соль'],
         consequenceType: 'reversible',
-        consequenceNote: 'Соль снимает метку зеркала и откатывает деградацию.',
+        consequenceNote: 'Ты сбиваешь нарастающее напряжение и возвращаешь контроль.',
         clearFlags: ['mirror_rule_broken'],
       },
     ],
@@ -155,7 +155,7 @@ export const day4Scenes: Scene[] = [
     roomId: 'bathroom', nearbyRooms: ['hallway'],
     text: [
       'Соль шипит на стекле. Силуэт в зеркале распадается на рябь.',
-      'Ты не нарушил правило и сбросил напряжение этой ночи.',
+      'Воздух становится легче, а дрожь в руках постепенно уходит.',
     ],
     choices: [{ id: 'c1', text: 'Вернуться в кровать', nextSceneId: 'd5_start' }],
   },

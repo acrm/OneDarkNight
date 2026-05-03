@@ -111,9 +111,9 @@ export const day1Scenes: Scene[] = [
     roomId: 'living-room', nearbyRooms: ['kitchen', 'bathroom', 'hallway'],
     text: ['Ты кормишь брата. Он засыпает. Родители возвращаются вечером. Свободное время.'],
     choices: [
-      { id: 'c1', text: 'Смотреть телевизор', nextSceneId: 'd1_tv' },
-      { id: 'c2', text: 'Принять душ', nextSceneId: 'd1_shower' },
-      { id: 'c3', text: 'Почитать книгу', nextSceneId: 'd1_read' },
+      { id: 'c1', text: 'Смотреть телевизор', nextSceneId: 'd1_tv', removeItems: ['молоко'] },
+      { id: 'c2', text: 'Принять душ', nextSceneId: 'd1_shower', removeItems: ['молоко'] },
+      { id: 'c3', text: 'Почитать книгу', nextSceneId: 'd1_read', removeItems: ['молоко'] },
     ],
   },
   {

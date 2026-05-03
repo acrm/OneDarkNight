@@ -19,6 +19,7 @@ export function GamePage() {
         <div className="header-badges">
           <span className="day-badge">День {scene.day}</span>
           <span className="room-badge"><i className="fa-solid fa-compass" /> {ROOM_LABELS[currentRoomId]}</span>
+          <a className="devtools-badge" href="#/devtools"><i className="fa-solid fa-wrench" /> Devtool</a>
         </div>
       </header>
       <main><SceneCard scene={scene} /></main>

@@ -89,6 +89,38 @@
   grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
 }
 
+.devtools-atlas-preview-wrap {
+  margin-bottom: 0.85rem;
+  border: 1px solid #2d2d4a;
+  border-radius: 12px;
+  padding: 0.6rem;
+  background:
+    linear-gradient(45deg, #161628 25%, transparent 25%) 0 0/18px 18px,
+    linear-gradient(-45deg, #161628 25%, transparent 25%) 0 0/18px 18px,
+    linear-gradient(45deg, transparent 75%, #161628 75%) 0 0/18px 18px,
+    linear-gradient(-45deg, transparent 75%, #161628 75%) 0 0/18px 18px,
+    #1f1f36;
+  overflow: auto;
+}
+
+.devtools-atlas-preview {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  image-rendering: pixelated;
+  border: 1px solid #3a3a5f;
+  background: #10101c;
+}
+
+.devtools-atlas-placeholder {
+  min-height: 140px;
+  display: grid;
+  place-items: center;
+  color: #a6a6c5;
+  border: 1px dashed #3e3e64;
+  border-radius: 10px;
+}
+
 .devtools-bg-config {
   margin-top: 0.8rem;
   grid-template-columns: 1fr auto auto;

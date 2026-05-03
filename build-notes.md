@@ -7,3 +7,4 @@
 - 2026w15-0.5 — fix inventory dedup and item consumption
 - 2026w15-0.6 — content: remove in-scene rule hints
 - 2026w15-0.7 — add sprite atlas devtool page
+- 2026w15-0.8 — show atlas preview with slicing grid overlay

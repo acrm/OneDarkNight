@@ -1,4 +1,4 @@
-import { ChangeEvent, useEffect, useMemo, useState } from 'react';
+import { ChangeEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { useDevtoolsStore } from '../../application/devtoolsStore';
 import {
   buildFrames,
@@ -97,6 +97,7 @@ export function DevtoolsPage() {
   } = useDevtoolsStore();
 
   const [atlasImage, setAtlasImageEl] = useState<HTMLImageElement | null>(null);
+  const atlasCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const [errorText, setErrorText] = useState<string>('');
   const [isPlaying, setIsPlaying] = useState(true);
   const [playbackFrame, setPlaybackFrame] = useState(0);
@@ -122,6 +123,46 @@ export function DevtoolsPage() {
       cancelled = true;
     };
   }, [atlasDataUrl]);
+
+  useEffect(() => {
+    const canvas = atlasCanvasRef.current;
+    if (!canvas) return;
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    if (!atlasImage) {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      return;
+    }
+
+    const width = atlasImage.width;
+    const height = atlasImage.height;
+    if (canvas.width !== width) canvas.width = width;
+    if (canvas.height !== height) canvas.height = height;
+
+    ctx.clearRect(0, 0, width, height);
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(atlasImage, 0, 0);
+
+    const outline = '#73c2ff';
+    const shadow = '#10243f';
+
+    for (let row = 0; row < grid.rows; row += 1) {
+      for (let col = 0; col < grid.columns; col += 1) {
+        const x = grid.offsetX + col * (grid.cellWidth + grid.gapX);
+        const y = grid.offsetY + row * (grid.cellHeight + grid.gapY);
+
+        ctx.strokeStyle = shadow;
+        ctx.lineWidth = 2;
+        ctx.strokeRect(x, y, grid.cellWidth, grid.cellHeight);
+
+        ctx.strokeStyle = outline;
+        ctx.lineWidth = 1;
+        ctx.strokeRect(x + 0.5, y + 0.5, grid.cellWidth, grid.cellHeight);
+      }
+    }
+  }, [atlasImage, grid]);
 
   const renderedFrames = useMemo<RenderedFrame[]>(() => {
     if (!atlasImage) return [];
@@ -368,6 +409,18 @@ export function DevtoolsPage() {
 
       <section className="devtools-panel">
         <h2>2. Сетка и вырезание фона</h2>
+        <div className="devtools-atlas-preview-wrap">
+          {atlasImage ? (
+            <canvas
+              ref={atlasCanvasRef}
+              className="devtools-atlas-preview"
+              width={atlasImage.width}
+              height={atlasImage.height}
+            />
+          ) : (
+            <div className="devtools-atlas-placeholder">Загрузите atlas, чтобы увидеть изображение и сетку.</div>
+          )}
+        </div>
         <div className="devtools-grid-config">
           <label className="devtools-field"><span>Cell W</span><input type="number" value={grid.cellWidth} onChange={(e) => onGridInput('cellWidth', e.target.value)} /></label>
           <label className="devtools-field"><span>Cell H</span><input type="number" value={grid.cellHeight} onChange={(e) => onGridInput('cellHeight', e.target.value)} /></label>

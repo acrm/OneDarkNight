@@ -17,6 +17,14 @@ export interface BackgroundRemovalConfig {
 export interface SpriteDefinition {
   id: string;
   name: string;
+  frameCount: number;
+  frameWidth: number;
+  frameHeight: number;
+  anchors: Array<{
+    x: number;
+    y: number;
+  }>;
+  confirmed: boolean;
   frameSpec: string;
   fps: number;
   loop: boolean;
@@ -33,6 +41,9 @@ export interface AtlasDocument {
     id: string;
     name: string;
     frameSpec: string;
+    frameCount: number;
+    frameWidth: number;
+    frameHeight: number;
     frameIndices: number[];
     fps: number;
     loop: boolean;

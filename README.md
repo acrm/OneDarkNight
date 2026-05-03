@@ -26,17 +26,15 @@ npm run bump:build -- --desc "description"  # version bump
 
 ## Sprite Atlas Devtool
 - Open `#/devtools` in the app or use the `Devtool` badge from the game header.
-- Upload an atlas image (PNG/JPG/WebP), then configure slicing: cell size, offsets, gaps, columns, rows.
-- The loaded atlas is shown immediately with a live slicing grid overlay based on current parameters.
-- Two draggable control points are available for mobile-friendly setup: top-left and bottom-right corners of the first sprite.
-- Control points now use UI-sized touch targets for easier dragging on mobile screens.
-- Each control point emits one horizontal and one vertical guide line; all other guide lines repeat with the same spacing between these two reference lines.
-- Heavy frame extraction and background removal run only after explicit confirmation of slicing parameters.
-- Background cleanup supports color-key removal sampled from each frame top-left pixel with adjustable tolerance.
-- Numeric fields include `+`/`-` steppers for precise changes.
-- Each extracted frame is auto-numbered; create named sprites and define frame sequences (`1-4,7,9-12`).
-- Mark loop/fps and preview playback for any selected sprite animation.
-- Export/import atlas metadata as JSON (grid settings, background removal settings, sprite definitions).
+- Upload atlas image (PNG/JPG/WebP), then use zoom and pan to position the view on desktop and mobile.
+- Sprite list starts empty: add a sprite, set name, frame count, frame width and frame height, then confirm.
+- After confirmation, atlas displays one anchor marker per frame for the sprite.
+- Each frame is drawn as a rectangle centered on its anchor, using configured frame size.
+- The last moved anchor also shows a crosshair marker at frame bottom-right corner.
+- Dragging crosshair updates frame width/height for the sprite and applies instantly to all its frames.
+- Anchor and crosshair guide lines are intentionally thick for visibility on mobile and desktop.
+- Numeric controls provide `+` / `-` steppers for precise edits.
+- Import/export JSON keeps sprite metadata and atlas configuration.
 
 ## Architecture
 Clean/DDD: `domain → application → infrastructure + presentation`

@@ -68,7 +68,7 @@ const initialState: DevtoolsState = {
   imageHeight: 0,
   grid: defaultGrid,
   backgroundRemoval: defaultBgRemoval,
-  sprites: createDefaultSpritesList(defaultGrid.columns * defaultGrid.rows),
+  sprites: [],
   selectedSpriteId: null,
   selectedPreviewSpriteId: null,
 };
@@ -98,6 +98,11 @@ export const useDevtoolsStore = create<DevtoolsStore>()(
         const nextSprite: SpriteDefinition = {
           id: `custom-${crypto.randomUUID()}`,
           name: `custom_${nextIndex}`,
+          frameCount: 1,
+          frameWidth: state.grid.cellWidth,
+          frameHeight: state.grid.cellHeight,
+          anchors: [],
+          confirmed: false,
           frameSpec: '1',
           fps: 8,
           loop: true,

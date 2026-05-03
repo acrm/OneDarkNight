@@ -1,33 +1,40 @@
-import { ChangeEvent, PointerEvent, useEffect, useMemo, useRef, useState } from 'react';
+import { ChangeEvent, PointerEvent, WheelEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { useDevtoolsStore } from '../../application/devtoolsStore';
-import {
-  buildFrames,
-  clampPositiveInt,
-  parseFrameSpec,
-  removeBackground,
-  toAtlasDocument,
-} from '../../application/spriteAtlasUtils';
-import type { AtlasDocument, AtlasGridConfig, SpriteDefinition } from '../../application/devtoolsTypes';
+import { clampPositiveInt, toAtlasDocument } from '../../application/spriteAtlasUtils';
+import type { AtlasDocument, SpriteDefinition } from '../../application/devtoolsTypes';
 import './DevtoolsPage.css';
 
-interface RenderedFrame {
-  index: number;
-  dataUrl: string;
+type DragMode = 'pan' | 'anchor' | 'crosshair';
+
+interface DragState {
+  mode: DragMode;
+  pointerId: number;
+  spriteId?: string;
+  frameIndex?: number;
+  lastClientX: number;
+  lastClientY: number;
 }
 
-type DragHandle = 'top-left' | 'bottom-right' | null;
+interface LastMovedAnchor {
+  spriteId: string;
+  frameIndex: number;
+}
 
 interface NumberStepperFieldProps {
   label: string;
   value: number;
   onChange: (next: number) => void;
-  step?: number;
   min?: number;
   max?: number;
+  step?: number;
 }
 
-const HANDLE_VISUAL_RADIUS_UI = 14;
-const HANDLE_HIT_RADIUS_UI = 28;
+const MARKER_VISUAL_RADIUS_UI = 16;
+const MARKER_HIT_RADIUS_UI = 30;
+const VIEW_MIN_SCALE = 0.25;
+const VIEW_MAX_SCALE = 12;
+
+const clamp = (value: number, min: number, max: number): number => Math.min(max, Math.max(min, value));
 
 const loadImageFromDataUrl = (dataUrl: string): Promise<HTMLImageElement> => {
   return new Promise((resolve, reject) => {
@@ -56,74 +63,22 @@ const parseJsonFile = (file: File): Promise<unknown> => {
 const isAtlasDocument = (value: unknown): value is AtlasDocument => {
   if (!value || typeof value !== 'object') return false;
   const candidate = value as Partial<AtlasDocument>;
-  return (
-    candidate.schemaVersion === 1 &&
-    typeof candidate.atlasFileName === 'string' &&
-    !!candidate.grid &&
-    !!candidate.backgroundRemoval &&
-    Array.isArray(candidate.sprites)
-  );
+  return candidate.schemaVersion === 1 && typeof candidate.atlasFileName === 'string' && Array.isArray(candidate.sprites);
 };
 
-const normalizeGrid = (grid: AtlasGridConfig): AtlasGridConfig => ({
-  cellWidth: clampPositiveInt(grid.cellWidth, 48),
-  cellHeight: clampPositiveInt(grid.cellHeight, 48),
-  offsetX: Number.isFinite(grid.offsetX) ? Math.round(grid.offsetX) : 0,
-  offsetY: Number.isFinite(grid.offsetY) ? Math.round(grid.offsetY) : 0,
-  gapX: Number.isFinite(grid.gapX) ? Math.round(grid.gapX) : 0,
-  gapY: Number.isFinite(grid.gapY) ? Math.round(grid.gapY) : 0,
-  columns: clampPositiveInt(grid.columns, 1),
-  rows: clampPositiveInt(grid.rows, 1),
-});
-
-const normalizeSprites = (sprites: AtlasDocument['sprites']): SpriteDefinition[] => {
-  return sprites.map((sprite, idx) => ({
-    id: sprite.id || `imported-${idx + 1}`,
-    name: sprite.name || `imported_${idx + 1}`,
-    frameSpec: sprite.frameSpec || String(sprite.frameIndices[0] ?? 1),
-    fps: clampPositiveInt(sprite.fps, 6),
-    loop: Boolean(sprite.loop),
-  }));
-};
-
-const getCanvasScale = (canvas: HTMLCanvasElement): { scaleX: number; scaleY: number } => {
-  const rect = canvas.getBoundingClientRect();
-  if (rect.width <= 0 || rect.height <= 0) {
-    return { scaleX: 1, scaleY: 1 };
-  }
-  return {
-    scaleX: canvas.width / rect.width,
-    scaleY: canvas.height / rect.height,
-  };
-};
-
-const uiPxToCanvasPx = (canvas: HTMLCanvasElement, px: number): number => {
-  const { scaleX, scaleY } = getCanvasScale(canvas);
-  return px * ((scaleX + scaleY) / 2);
-};
-
-const NumberStepperField = ({
-  label,
-  value,
-  onChange,
-  step = 1,
-  min,
-  max,
-}: NumberStepperFieldProps) => {
-  const clamp = (raw: number): number => {
+const NumberStepperField = ({ label, value, onChange, min, max, step = 1 }: NumberStepperFieldProps) => {
+  const clampNumber = (raw: number): number => {
     let next = raw;
     if (typeof min === 'number') next = Math.max(min, next);
     if (typeof max === 'number') next = Math.min(max, next);
     return next;
   };
 
-  const changeByStep = (delta: number) => onChange(clamp(value + delta));
-
   return (
     <label className="devtools-field devtools-field-stepper">
       <span>{label}</span>
       <div className="stepper-control">
-        <button className="devtools-btn tiny" type="button" onClick={() => changeByStep(-step)} aria-label={`${label} minus`}>
+        <button className="devtools-btn tiny" type="button" onClick={() => onChange(clampNumber(value - step))}>
           -
         </button>
         <input
@@ -132,10 +87,10 @@ const NumberStepperField = ({
           onChange={(e) => {
             const numeric = Number(e.target.value);
             if (!Number.isFinite(numeric)) return;
-            onChange(clamp(Math.round(numeric)));
+            onChange(clampNumber(Math.round(numeric)));
           }}
         />
-        <button className="devtools-btn tiny" type="button" onClick={() => changeByStep(step)} aria-label={`${label} plus`}>
+        <button className="devtools-btn tiny" type="button" onClick={() => onChange(clampNumber(value + step))}>
           +
         </button>
       </div>
@@ -143,17 +98,28 @@ const NumberStepperField = ({
   );
 };
 
-const isSameGrid = (a: AtlasGridConfig, b: AtlasGridConfig): boolean => {
-  return (
-    a.cellWidth === b.cellWidth &&
-    a.cellHeight === b.cellHeight &&
-    a.offsetX === b.offsetX &&
-    a.offsetY === b.offsetY &&
-    a.gapX === b.gapX &&
-    a.gapY === b.gapY &&
-    a.columns === b.columns &&
-    a.rows === b.rows
-  );
+const createInitialAnchors = (
+  frameCount: number,
+  frameWidth: number,
+  frameHeight: number,
+  imageWidth: number,
+  imageHeight: number
+): Array<{ x: number; y: number }> => {
+  if (frameCount <= 0) return [];
+
+  const anchors: Array<{ x: number; y: number }> = [];
+  const margin = 12;
+  const stepX = Math.max(8, frameWidth + 8);
+  const startX = frameWidth / 2 + margin;
+  const startY = frameHeight / 2 + margin;
+
+  for (let i = 0; i < frameCount; i += 1) {
+    const x = clamp(startX + i * stepX, frameWidth / 2, Math.max(frameWidth / 2, imageWidth - frameWidth / 2));
+    const y = clamp(startY, frameHeight / 2, Math.max(frameHeight / 2, imageHeight - frameHeight / 2));
+    anchors.push({ x, y });
+  }
+
+  return anchors;
 };
 
 export function DevtoolsPage() {
@@ -166,29 +132,25 @@ export function DevtoolsPage() {
     backgroundRemoval,
     sprites,
     selectedSpriteId,
-    selectedPreviewSpriteId,
     setAtlasImage,
-    updateGrid,
-    updateBackgroundRemoval,
-    regenerateDefaultSprites,
-    addSprite,
     updateSprite,
+    addSprite,
     deleteSprite,
     selectSprite,
-    selectPreviewSprite,
     importDocument,
     reset,
   } = useDevtoolsStore();
 
   const [atlasImage, setAtlasImageEl] = useState<HTMLImageElement | null>(null);
-  const atlasCanvasRef = useRef<HTMLCanvasElement | null>(null);
-  const [dragHandle, setDragHandle] = useState<DragHandle>(null);
-  const [confirmedGrid, setConfirmedGrid] = useState<AtlasGridConfig | null>(null);
-  const [confirmedBgTolerance, setConfirmedBgTolerance] = useState<number | null>(null);
-  const [confirmedBgEnabled, setConfirmedBgEnabled] = useState<boolean | null>(null);
-  const [errorText, setErrorText] = useState<string>('');
-  const [isPlaying, setIsPlaying] = useState(true);
-  const [playbackFrame, setPlaybackFrame] = useState(0);
+  const [errorText, setErrorText] = useState('');
+  const [lastMovedAnchor, setLastMovedAnchor] = useState<LastMovedAnchor | null>(null);
+  const [dragState, setDragState] = useState<DragState | null>(null);
+  const [viewScale, setViewScale] = useState(1);
+  const [viewOffset, setViewOffset] = useState({ x: 0, y: 0 });
+  const [canvasSize, setCanvasSize] = useState({ width: 600, height: 420 });
+
+  const viewportRef = useRef<HTMLDivElement | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -198,9 +160,9 @@ export function DevtoolsPage() {
     }
 
     loadImageFromDataUrl(atlasDataUrl)
-      .then((image) => {
+      .then((img) => {
         if (cancelled) return;
-        setAtlasImageEl(image);
+        setAtlasImageEl(img);
       })
       .catch((error: unknown) => {
         if (cancelled) return;
@@ -213,207 +175,313 @@ export function DevtoolsPage() {
   }, [atlasDataUrl]);
 
   useEffect(() => {
-    const canvas = atlasCanvasRef.current;
+    const viewport = viewportRef.current;
+    if (!viewport) return;
+
+    const resizeObserver = new ResizeObserver((entries) => {
+      const rect = entries[0]?.contentRect;
+      if (!rect) return;
+      setCanvasSize({ width: Math.max(280, Math.round(rect.width)), height: Math.max(260, Math.round(rect.height)) });
+    });
+
+    resizeObserver.observe(viewport);
+    return () => resizeObserver.disconnect();
+  }, []);
+
+  useEffect(() => {
+    if (!atlasImage) return;
+    const fitScale = Math.min(canvasSize.width / atlasImage.width, canvasSize.height / atlasImage.height);
+    const nextScale = clamp(fitScale, VIEW_MIN_SCALE, VIEW_MAX_SCALE);
+    setViewScale(nextScale);
+    setViewOffset({
+      x: (canvasSize.width - atlasImage.width * nextScale) / 2,
+      y: (canvasSize.height - atlasImage.height * nextScale) / 2,
+    });
+  }, [atlasImage, canvasSize.height, canvasSize.width]);
+
+  const markerModel = useMemo(() => {
+    const confirmedSprites = sprites.filter((sprite) => sprite.confirmed && sprite.anchors.length > 0);
+    const crosshair =
+      lastMovedAnchor &&
+      confirmedSprites.some((sprite) => sprite.id === lastMovedAnchor.spriteId)
+        ? lastMovedAnchor
+        : null;
+    return { confirmedSprites, crosshair };
+  }, [lastMovedAnchor, sprites]);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
     if (!canvas) return;
+
+    const dpr = window.devicePixelRatio || 1;
+    const width = Math.max(1, Math.round(canvasSize.width));
+    const height = Math.max(1, Math.round(canvasSize.height));
+
+    if (canvas.width !== Math.round(width * dpr)) canvas.width = Math.round(width * dpr);
+    if (canvas.height !== Math.round(height * dpr)) canvas.height = Math.round(height * dpr);
 
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    if (!atlasImage) {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      return;
-    }
-
-    const width = atlasImage.width;
-    const height = atlasImage.height;
-    if (canvas.width !== width) canvas.width = width;
-    if (canvas.height !== height) canvas.height = height;
-
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, width, height);
+
+    ctx.fillStyle = '#0e1120';
+    ctx.fillRect(0, 0, width, height);
+
+    if (!atlasImage) return;
+
+    ctx.save();
+    ctx.translate(viewOffset.x, viewOffset.y);
+    ctx.scale(viewScale, viewScale);
     ctx.imageSmoothingEnabled = false;
     ctx.drawImage(atlasImage, 0, 0);
 
-    const topLeft = { x: grid.offsetX, y: grid.offsetY };
-    const bottomRight = { x: grid.offsetX + grid.cellWidth, y: grid.offsetY + grid.cellHeight };
+    const baseLineWidth = Math.max(2.2, 3.2 / viewScale);
+    const markerRadius = Math.max(8, MARKER_VISUAL_RADIUS_UI / viewScale);
 
-    const stepX = Math.max(1, bottomRight.x - topLeft.x);
-    const stepY = Math.max(1, bottomRight.y - topLeft.y);
+    for (const sprite of markerModel.confirmedSprites) {
+      const isSelected = sprite.id === selectedSpriteId;
+      const rectColor = isSelected ? '#f97316' : '#60a5fa';
 
-    const drawVerticalLine = (x: number, color: string, lineWidth: number) => {
-      ctx.strokeStyle = color;
-      ctx.lineWidth = lineWidth;
-      ctx.beginPath();
-      ctx.moveTo(x + 0.5, 0);
-      ctx.lineTo(x + 0.5, height);
-      ctx.stroke();
-    };
+      for (let idx = 0; idx < sprite.anchors.length; idx += 1) {
+        const anchor = sprite.anchors[idx];
+        const left = anchor.x - sprite.frameWidth / 2;
+        const top = anchor.y - sprite.frameHeight / 2;
+        const right = left + sprite.frameWidth;
+        const bottom = top + sprite.frameHeight;
 
-    const drawHorizontalLine = (y: number, color: string, lineWidth: number) => {
-      ctx.strokeStyle = color;
-      ctx.lineWidth = lineWidth;
-      ctx.beginPath();
-      ctx.moveTo(0, y + 0.5);
-      ctx.lineTo(width, y + 0.5);
-      ctx.stroke();
-    };
+        ctx.strokeStyle = '#000000cc';
+        ctx.lineWidth = baseLineWidth + 2 / viewScale;
+        ctx.strokeRect(left, top, sprite.frameWidth, sprite.frameHeight);
 
-    const drawRepeatingLines = (
-      origin: number,
-      step: number,
-      limit: number,
-      drawLine: (value: number, color: string, lineWidth: number) => void
-    ) => {
-      for (let v = origin; v <= limit; v += step) {
-        drawLine(v, '#2a446f', 1);
+        ctx.strokeStyle = rectColor;
+        ctx.lineWidth = baseLineWidth;
+        ctx.strokeRect(left, top, sprite.frameWidth, sprite.frameHeight);
+
+        ctx.beginPath();
+        ctx.arc(anchor.x, anchor.y, markerRadius, 0, Math.PI * 2);
+        ctx.fillStyle = isSelected ? '#f97316' : '#22d3ee';
+        ctx.fill();
+        ctx.lineWidth = baseLineWidth;
+        ctx.strokeStyle = '#020617';
+        ctx.stroke();
+
+        if (markerModel.crosshair && markerModel.crosshair.spriteId === sprite.id && markerModel.crosshair.frameIndex === idx) {
+          const crossX = right;
+          const crossY = bottom;
+
+          ctx.strokeStyle = '#facc15';
+          ctx.lineWidth = Math.max(3, 3.8 / viewScale);
+          ctx.beginPath();
+          ctx.moveTo(crossX, 0);
+          ctx.lineTo(crossX, atlasImage.height);
+          ctx.moveTo(0, crossY);
+          ctx.lineTo(atlasImage.width, crossY);
+          ctx.stroke();
+
+          ctx.strokeStyle = '#22d3ee';
+          ctx.lineWidth = Math.max(3, 3.8 / viewScale);
+          ctx.beginPath();
+          ctx.moveTo(anchor.x, 0);
+          ctx.lineTo(anchor.x, atlasImage.height);
+          ctx.moveTo(0, anchor.y);
+          ctx.lineTo(atlasImage.width, anchor.y);
+          ctx.stroke();
+
+          const crossRadius = markerRadius + 2 / viewScale;
+          ctx.beginPath();
+          ctx.arc(crossX, crossY, crossRadius, 0, Math.PI * 2);
+          ctx.fillStyle = '#facc15';
+          ctx.fill();
+          ctx.lineWidth = baseLineWidth;
+          ctx.strokeStyle = '#111827';
+          ctx.stroke();
+        }
       }
-      for (let v = origin - step; v >= 0; v -= step) {
-        drawLine(v, '#2a446f', 1);
-      }
+    }
+
+    ctx.restore();
+  }, [atlasImage, canvasSize.height, canvasSize.width, markerModel.confirmedSprites, markerModel.crosshair, selectedSpriteId, viewOffset.x, viewOffset.y, viewScale]);
+
+  const toWorldCoords = (clientX: number, clientY: number): { x: number; y: number } | null => {
+    const canvas = canvasRef.current;
+    if (!canvas) return null;
+    const rect = canvas.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return null;
+
+    const uiX = clientX - rect.left;
+    const uiY = clientY - rect.top;
+
+    return {
+      x: (uiX - viewOffset.x) / viewScale,
+      y: (uiY - viewOffset.y) / viewScale,
     };
+  };
 
-    drawRepeatingLines(topLeft.x, stepX, width - 1, drawVerticalLine);
-    drawRepeatingLines(topLeft.y, stepY, height - 1, drawHorizontalLine);
-
-    drawVerticalLine(topLeft.x, '#34d6ff', 2);
-    drawHorizontalLine(topLeft.y, '#34d6ff', 2);
-    drawVerticalLine(bottomRight.x, '#ffb74d', 2);
-    drawHorizontalLine(bottomRight.y, '#ffb74d', 2);
-
-    const handleRadius = Math.max(8, uiPxToCanvasPx(canvas, HANDLE_VISUAL_RADIUS_UI));
-
-    const drawHandle = (x: number, y: number, color: string) => {
-      ctx.beginPath();
-      ctx.arc(x, y, handleRadius, 0, Math.PI * 2);
-      ctx.fillStyle = color;
-      ctx.fill();
-      ctx.lineWidth = 2;
-      ctx.strokeStyle = '#0f172a';
-      ctx.stroke();
+  const worldToUi = (x: number, y: number): { x: number; y: number } => {
+    return {
+      x: x * viewScale + viewOffset.x,
+      y: y * viewScale + viewOffset.y,
     };
+  };
 
-    drawHandle(topLeft.x, topLeft.y, '#22d3ee');
-    drawHandle(bottomRight.x, bottomRight.y, '#f59e0b');
-  }, [atlasImage, grid]);
+  const hitTestMarkers = (clientX: number, clientY: number): { mode: 'anchor' | 'crosshair'; spriteId: string; frameIndex: number } | null => {
+    const canvas = canvasRef.current;
+    if (!canvas || !atlasImage) return null;
+    const rect = canvas.getBoundingClientRect();
+    const x = clientX - rect.left;
+    const y = clientY - rect.top;
 
-  const confirmedGridInUse = confirmedGrid ?? grid;
-  const confirmedBackgroundRemoval = useMemo(
-    () => ({
-      enabled: confirmedBgEnabled ?? backgroundRemoval.enabled,
-      tolerance: confirmedBgTolerance ?? backgroundRemoval.tolerance,
-    }),
-    [backgroundRemoval.enabled, backgroundRemoval.tolerance, confirmedBgEnabled, confirmedBgTolerance]
-  );
-
-  const hasConfirmedProcessing = Boolean(confirmedGrid);
-  const hasPendingConfigChanges =
-    hasConfirmedProcessing &&
-    (!isSameGrid(grid, confirmedGridInUse) ||
-      confirmedBackgroundRemoval.enabled !== backgroundRemoval.enabled ||
-      confirmedBackgroundRemoval.tolerance !== backgroundRemoval.tolerance);
-
-  const renderedFrames = useMemo<RenderedFrame[]>(() => {
-    if (!atlasImage || !hasConfirmedProcessing) return [];
-
-    const rawFrames = buildFrames(confirmedGridInUse);
-
-    return rawFrames.map((frame) => {
-      const canvas = document.createElement('canvas');
-      canvas.width = frame.width;
-      canvas.height = frame.height;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) {
-        return { index: frame.index, dataUrl: '' };
+    if (markerModel.crosshair) {
+      const sprite = sprites.find((item) => item.id === markerModel.crosshair?.spriteId);
+      if (sprite && sprite.anchors[markerModel.crosshair.frameIndex]) {
+        const anchor = sprite.anchors[markerModel.crosshair.frameIndex];
+        const cross = worldToUi(anchor.x + sprite.frameWidth / 2, anchor.y + sprite.frameHeight / 2);
+        const dx = x - cross.x;
+        const dy = y - cross.y;
+        if (dx * dx + dy * dy <= MARKER_HIT_RADIUS_UI * MARKER_HIT_RADIUS_UI) {
+          return { mode: 'crosshair', spriteId: sprite.id, frameIndex: markerModel.crosshair.frameIndex };
+        }
       }
+    }
 
-      ctx.clearRect(0, 0, frame.width, frame.height);
-      ctx.drawImage(
-        atlasImage,
-        frame.x,
-        frame.y,
-        frame.width,
-        frame.height,
-        0,
-        0,
-        frame.width,
-        frame.height
-      );
+    for (const sprite of markerModel.confirmedSprites) {
+      for (let i = 0; i < sprite.anchors.length; i += 1) {
+        const anchorUi = worldToUi(sprite.anchors[i].x, sprite.anchors[i].y);
+        const dx = x - anchorUi.x;
+        const dy = y - anchorUi.y;
+        if (dx * dx + dy * dy <= MARKER_HIT_RADIUS_UI * MARKER_HIT_RADIUS_UI) {
+          return { mode: 'anchor', spriteId: sprite.id, frameIndex: i };
+        }
+      }
+    }
 
-      const imageData = ctx.getImageData(0, 0, frame.width, frame.height);
-      const processed = removeBackground(imageData, confirmedBackgroundRemoval);
-      ctx.putImageData(processed, 0, 0);
+    return null;
+  };
 
-      return {
-        index: frame.index,
-        dataUrl: canvas.toDataURL('image/png'),
-      };
+  const updateAnchor = (spriteId: string, frameIndex: number, worldX: number, worldY: number) => {
+    if (!atlasImage) return;
+    const sprite = sprites.find((item) => item.id === spriteId);
+    if (!sprite || !sprite.anchors[frameIndex]) return;
+
+    const clampedX = clamp(worldX, sprite.frameWidth / 2, atlasImage.width - sprite.frameWidth / 2);
+    const clampedY = clamp(worldY, sprite.frameHeight / 2, atlasImage.height - sprite.frameHeight / 2);
+
+    const anchors = sprite.anchors.map((point, idx) => (idx === frameIndex ? { x: clampedX, y: clampedY } : point));
+    updateSprite(spriteId, { anchors, confirmed: true });
+    setLastMovedAnchor({ spriteId, frameIndex });
+  };
+
+  const updateSpriteSizeFromCrosshair = (spriteId: string, frameIndex: number, worldX: number, worldY: number) => {
+    if (!atlasImage) return;
+    const sprite = sprites.find((item) => item.id === spriteId);
+    if (!sprite || !sprite.anchors[frameIndex]) return;
+
+    const anchor = sprite.anchors[frameIndex];
+    const frameWidth = clampPositiveInt(Math.round((worldX - anchor.x) * 2), sprite.frameWidth);
+    const frameHeight = clampPositiveInt(Math.round((worldY - anchor.y) * 2), sprite.frameHeight);
+
+    const clampedWidth = clamp(frameWidth, 8, atlasImage.width);
+    const clampedHeight = clamp(frameHeight, 8, atlasImage.height);
+
+    updateSprite(spriteId, {
+      frameWidth: clampedWidth,
+      frameHeight: clampedHeight,
+      confirmed: true,
     });
-  }, [atlasImage, confirmedGridInUse, confirmedBackgroundRemoval, hasConfirmedProcessing]);
+    setLastMovedAnchor({ spriteId, frameIndex });
+  };
 
-  const frameMap = useMemo(() => {
-    const entries = renderedFrames.map((frame) => [frame.index, frame.dataUrl] as const);
-    return new Map<number, string>(entries);
-  }, [renderedFrames]);
+  const onCanvasPointerDown = (event: PointerEvent<HTMLCanvasElement>) => {
+    if (!atlasImage) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
 
-  const maxFrameIndex = confirmedGridInUse.columns * confirmedGridInUse.rows;
+    const hit = hitTestMarkers(event.clientX, event.clientY);
+    canvas.setPointerCapture(event.pointerId);
 
-  const parsedSprites = useMemo(() => {
-    return sprites.map((sprite) => {
-      const parsed = parseFrameSpec(sprite.frameSpec, maxFrameIndex);
-      return {
-        sprite,
-        frameIndices: parsed.error ? [] : parsed.frameIndices,
-        error: parsed.error,
-        type: parsed.error ? 'invalid' : parsed.frameIndices.length > 1 ? 'animated' : 'static',
-      };
-    });
-  }, [sprites, maxFrameIndex]);
-
-  const selectedSprite = parsedSprites.find((entry) => entry.sprite.id === selectedSpriteId) ?? null;
-
-  const selectedFrameSet = useMemo(() => {
-    if (!selectedSprite) return new Set<number>();
-    return new Set(selectedSprite.frameIndices);
-  }, [selectedSprite]);
-
-  const previewEntry =
-    parsedSprites.find((entry) => entry.sprite.id === selectedPreviewSpriteId) ?? parsedSprites[0] ?? null;
-
-  const previewFrames = useMemo(() => {
-    if (!previewEntry) return [];
-    return previewEntry.frameIndices
-      .map((index) => frameMap.get(index))
-      .filter((value): value is string => Boolean(value));
-  }, [previewEntry, frameMap]);
-
-  useEffect(() => {
-    setPlaybackFrame(0);
-  }, [selectedPreviewSpriteId]);
-
-  useEffect(() => {
-    if (!isPlaying || !previewEntry || previewFrames.length <= 1) {
+    if (hit) {
+      selectSprite(hit.spriteId);
+      setDragState({
+        mode: hit.mode,
+        pointerId: event.pointerId,
+        spriteId: hit.spriteId,
+        frameIndex: hit.frameIndex,
+        lastClientX: event.clientX,
+        lastClientY: event.clientY,
+      });
       return;
     }
 
-    const frameDuration = Math.max(40, Math.floor(1000 / Math.max(1, previewEntry.sprite.fps)));
+    setDragState({
+      mode: 'pan',
+      pointerId: event.pointerId,
+      lastClientX: event.clientX,
+      lastClientY: event.clientY,
+    });
+  };
 
-    const timer = window.setInterval(() => {
-      setPlaybackFrame((current) => {
-        const next = current + 1;
-        if (next < previewFrames.length) {
-          return next;
-        }
-        if (previewEntry.sprite.loop) {
-          return 0;
-        }
-        setIsPlaying(false);
-        return current;
-      });
-    }, frameDuration);
+  const onCanvasPointerMove = (event: PointerEvent<HTMLCanvasElement>) => {
+    if (!dragState || dragState.pointerId !== event.pointerId) return;
 
-    return () => window.clearInterval(timer);
-  }, [isPlaying, previewEntry, previewFrames.length]);
+    if (dragState.mode === 'pan') {
+      const dx = event.clientX - dragState.lastClientX;
+      const dy = event.clientY - dragState.lastClientY;
+      setViewOffset((prev) => ({ x: prev.x + dx, y: prev.y + dy }));
+      setDragState((prev) => (prev ? { ...prev, lastClientX: event.clientX, lastClientY: event.clientY } : prev));
+      return;
+    }
 
-  const activePreviewFrame = previewFrames[Math.min(playbackFrame, Math.max(0, previewFrames.length - 1))] ?? null;
+    const world = toWorldCoords(event.clientX, event.clientY);
+    if (!world || !dragState.spriteId || dragState.frameIndex === undefined) return;
+
+    if (dragState.mode === 'anchor') {
+      updateAnchor(dragState.spriteId, dragState.frameIndex, world.x, world.y);
+      return;
+    }
+
+    updateSpriteSizeFromCrosshair(dragState.spriteId, dragState.frameIndex, world.x, world.y);
+  };
+
+  const onCanvasPointerUp = (event: PointerEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current;
+    if (canvas?.hasPointerCapture(event.pointerId)) {
+      canvas.releasePointerCapture(event.pointerId);
+    }
+    setDragState(null);
+  };
+
+  const zoomBy = (factor: number, centerUiX?: number, centerUiY?: number) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const cx = centerUiX ?? rect.width / 2;
+    const cy = centerUiY ?? rect.height / 2;
+
+    const prevScale = viewScale;
+    const nextScale = clamp(prevScale * factor, VIEW_MIN_SCALE, VIEW_MAX_SCALE);
+    if (nextScale === prevScale) return;
+
+    const worldX = (cx - viewOffset.x) / prevScale;
+    const worldY = (cy - viewOffset.y) / prevScale;
+
+    setViewScale(nextScale);
+    setViewOffset({
+      x: cx - worldX * nextScale,
+      y: cy - worldY * nextScale,
+    });
+  };
+
+  const onCanvasWheel = (event: WheelEvent<HTMLCanvasElement>) => {
+    event.preventDefault();
+    const rect = event.currentTarget.getBoundingClientRect();
+    const centerX = event.clientX - rect.left;
+    const centerY = event.clientY - rect.top;
+    const factor = event.deltaY < 0 ? 1.12 : 1 / 1.12;
+    zoomBy(factor, centerX, centerY);
+  };
 
   const onAtlasFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -436,10 +504,8 @@ export function DevtoolsPage() {
         imageWidth: image.width,
         imageHeight: image.height,
       });
+      setLastMovedAnchor(null);
       setAtlasImageEl(image);
-      setConfirmedGrid(null);
-      setConfirmedBgEnabled(null);
-      setConfirmedBgTolerance(null);
     } catch (error: unknown) {
       setErrorText(error instanceof Error ? error.message : 'Не удалось загрузить атлас.');
     }
@@ -457,125 +523,59 @@ export function DevtoolsPage() {
         throw new Error('JSON не соответствует формату AtlasDocument v1.');
       }
 
+      const normalizedSprites: SpriteDefinition[] = parsed.sprites.map((sprite, idx) => ({
+        id: sprite.id || `imported-${idx + 1}`,
+        name: sprite.name || `imported_${idx + 1}`,
+        frameCount: clampPositiveInt(sprite.frameCount ?? sprite.frameIndices.length ?? 1, 1),
+        frameWidth: clampPositiveInt(sprite.frameWidth ?? grid.cellWidth, grid.cellWidth),
+        frameHeight: clampPositiveInt(sprite.frameHeight ?? grid.cellHeight, grid.cellHeight),
+        anchors: [],
+        confirmed: false,
+        frameSpec: sprite.frameSpec || String(sprite.frameIndices[0] ?? 1),
+        fps: clampPositiveInt(sprite.fps, 6),
+        loop: Boolean(sprite.loop),
+      }));
+
       importDocument({
         atlasFileName: parsed.atlasFileName,
         imageWidth: parsed.imageWidth,
         imageHeight: parsed.imageHeight,
-        grid: normalizeGrid(parsed.grid),
-        backgroundRemoval: {
-          enabled: Boolean(parsed.backgroundRemoval.enabled),
-          tolerance: Math.max(0, Math.round(parsed.backgroundRemoval.tolerance)),
-        },
-        sprites: normalizeSprites(parsed.sprites),
+        grid,
+        backgroundRemoval,
+        sprites: normalizedSprites,
       });
-      setConfirmedGrid(normalizeGrid(parsed.grid));
-      setConfirmedBgEnabled(Boolean(parsed.backgroundRemoval.enabled));
-      setConfirmedBgTolerance(Math.max(0, Math.round(parsed.backgroundRemoval.tolerance)));
+      setLastMovedAnchor(null);
     } catch (error: unknown) {
       setErrorText(error instanceof Error ? error.message : 'Не удалось импортировать JSON.');
     }
   };
 
-  const resetTool = () => {
-    reset();
-    setConfirmedGrid(null);
-    setConfirmedBgEnabled(null);
-    setConfirmedBgTolerance(null);
-  };
-
-  const updateGridFromHandle = (handle: Exclude<DragHandle, null>, x: number, y: number) => {
-    if (!atlasImage) return;
-    const clampedX = Math.max(0, Math.min(atlasImage.width, Math.round(x)));
-    const clampedY = Math.max(0, Math.min(atlasImage.height, Math.round(y)));
-
-    if (handle === 'top-left') {
-      const right = grid.offsetX + grid.cellWidth;
-      const bottom = grid.offsetY + grid.cellHeight;
-      const nextOffsetX = Math.min(clampedX, right - 1);
-      const nextOffsetY = Math.min(clampedY, bottom - 1);
-      const nextCellWidth = Math.max(1, right - nextOffsetX);
-      const nextCellHeight = Math.max(1, bottom - nextOffsetY);
-      updateGrid({
-        offsetX: nextOffsetX,
-        offsetY: nextOffsetY,
-        cellWidth: nextCellWidth,
-        cellHeight: nextCellHeight,
-      });
+  const confirmSprite = (sprite: SpriteDefinition) => {
+    if (!atlasImage) {
+      setErrorText('Сначала загрузите атлас.');
       return;
     }
 
-    const nextCellWidth = Math.max(1, clampedX - grid.offsetX);
-    const nextCellHeight = Math.max(1, clampedY - grid.offsetY);
-    updateGrid({ cellWidth: nextCellWidth, cellHeight: nextCellHeight });
-  };
+    const frameCount = clampPositiveInt(sprite.frameCount, 1);
+    const frameWidth = clampPositiveInt(sprite.frameWidth, 1);
+    const frameHeight = clampPositiveInt(sprite.frameHeight, 1);
 
-  const locateHandle = (x: number, y: number): DragHandle => {
-    const canvas = atlasCanvasRef.current;
-    if (!canvas) return null;
-    const topLeft = { x: grid.offsetX, y: grid.offsetY };
-    const bottomRight = { x: grid.offsetX + grid.cellWidth, y: grid.offsetY + grid.cellHeight };
-    const radius = Math.max(12, uiPxToCanvasPx(canvas, HANDLE_HIT_RADIUS_UI));
-    const inCircle = (cx: number, cy: number): boolean => {
-      const dx = x - cx;
-      const dy = y - cy;
-      return dx * dx + dy * dy <= radius * radius;
-    };
-
-    if (inCircle(topLeft.x, topLeft.y)) return 'top-left';
-    if (inCircle(bottomRight.x, bottomRight.y)) return 'bottom-right';
-    return null;
-  };
-
-  const getCanvasCoords = (canvas: HTMLCanvasElement, clientX: number, clientY: number) => {
-    const rect = canvas.getBoundingClientRect();
-    const scaleX = canvas.width / rect.width;
-    const scaleY = canvas.height / rect.height;
-    return {
-      x: (clientX - rect.left) * scaleX,
-      y: (clientY - rect.top) * scaleY,
-    };
-  };
-
-  const onCanvasPointerDown = (event: PointerEvent<HTMLCanvasElement>) => {
-    if (!atlasImage) return;
-    const canvas = atlasCanvasRef.current;
-    if (!canvas) return;
-    const coords = getCanvasCoords(canvas, event.clientX, event.clientY);
-    const handle = locateHandle(coords.x, coords.y);
-    if (!handle) return;
-    setDragHandle(handle);
-    canvas.setPointerCapture(event.pointerId);
-    event.preventDefault();
-  };
-
-  const onCanvasPointerMove = (event: PointerEvent<HTMLCanvasElement>) => {
-    if (!dragHandle) return;
-    const canvas = atlasCanvasRef.current;
-    if (!canvas) return;
-    const coords = getCanvasCoords(canvas, event.clientX, event.clientY);
-    updateGridFromHandle(dragHandle, coords.x, coords.y);
-    event.preventDefault();
-  };
-
-  const onCanvasPointerUp = (event: PointerEvent<HTMLCanvasElement>) => {
-    const canvas = atlasCanvasRef.current;
-    if (canvas?.hasPointerCapture(event.pointerId)) {
-      canvas.releasePointerCapture(event.pointerId);
+    let anchors = sprite.anchors.slice(0, frameCount);
+    if (anchors.length < frameCount) {
+      const initial = createInitialAnchors(frameCount, frameWidth, frameHeight, atlasImage.width, atlasImage.height);
+      anchors = anchors.concat(initial.slice(anchors.length));
     }
-    setDragHandle(null);
-  };
 
-  const confirmSlicingParams = () => {
-    setConfirmedGrid({ ...grid });
-    setConfirmedBgEnabled(backgroundRemoval.enabled);
-    setConfirmedBgTolerance(backgroundRemoval.tolerance);
-  };
+    updateSprite(sprite.id, {
+      frameCount,
+      frameWidth,
+      frameHeight,
+      anchors,
+      confirmed: true,
+    });
 
-  const appendFrameToSelectedSprite = (frameIndex: number) => {
-    if (!selectedSprite) return;
-    const current = selectedSprite.sprite.frameSpec.trim();
-    const next = current ? `${current},${frameIndex}` : String(frameIndex);
-    updateSprite(selectedSprite.sprite.id, { frameSpec: next });
+    setLastMovedAnchor({ spriteId: sprite.id, frameIndex: Math.max(0, anchors.length - 1) });
+    selectSprite(sprite.id);
   };
 
   const exportJson = () => {
@@ -584,14 +584,7 @@ export function DevtoolsPage() {
       return;
     }
 
-    const doc = toAtlasDocument(
-      atlasFileName,
-      { width: imageWidth, height: imageHeight },
-      grid,
-      backgroundRemoval,
-      sprites
-    );
-
+    const doc = toAtlasDocument(atlasFileName, { width: imageWidth, height: imageHeight }, grid, backgroundRemoval, sprites);
     const blob = new Blob([JSON.stringify(doc, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement('a');
@@ -601,12 +594,18 @@ export function DevtoolsPage() {
     URL.revokeObjectURL(url);
   };
 
+  const resetTool = () => {
+    reset();
+    setLastMovedAnchor(null);
+    setErrorText('');
+  };
+
   return (
     <div className="devtools-page">
       <header className="devtools-header">
         <div>
           <h1>Sprite Atlas Devtool</h1>
-          <p>Загрузка atlas, разрезка на кадры, вырезание фона, именование спрайтов и preview анимаций.</p>
+          <p>Зум/панорама атласа и настройка маркеров спрайтов через якорь и перекрестие.</p>
         </div>
         <div className="devtools-header-actions">
           <a className="devtools-link" href="#/">Вернуться к игре</a>
@@ -632,206 +631,113 @@ export function DevtoolsPage() {
         <div className="devtools-atlas-meta">
           <span>Файл: {atlasFileName || 'не загружен'}</span>
           <span>Размер: {imageWidth || 0} x {imageHeight || 0}</span>
-          <span>Кадров: {maxFrameIndex}</span>
+          <span>Спрайтов: {sprites.length}</span>
         </div>
       </section>
 
-      <section className="devtools-panel">
-        <h2>2. Сетка и вырезание фона</h2>
-        <div className="devtools-atlas-preview-wrap">
-          {atlasImage ? (
-            <canvas
-              ref={atlasCanvasRef}
-              className="devtools-atlas-preview"
-              width={atlasImage.width}
-              height={atlasImage.height}
-              onPointerDown={onCanvasPointerDown}
-              onPointerMove={onCanvasPointerMove}
-              onPointerUp={onCanvasPointerUp}
-              onPointerCancel={onCanvasPointerUp}
-            />
-          ) : (
-            <div className="devtools-atlas-placeholder">Загрузите atlas, чтобы увидеть изображение и сетку.</div>
-          )}
-        </div>
-        <p className="devtools-hint">
-          Перетаскивайте точки: бирюзовая задает верхний левый угол первого кадра, оранжевая задает правый нижний.
-          От каждой точки идут опорные вертикальная и горизонтальная линии, остальные линии повторяются с тем же шагом.
-          Тяжелая разрезка и удаление фона запускаются только после подтверждения параметров.
-        </p>
-        <div className="devtools-grid-config">
-          <NumberStepperField label="Cell W" value={grid.cellWidth} onChange={(next) => updateGrid({ cellWidth: clampPositiveInt(next, grid.cellWidth) })} min={1} />
-          <NumberStepperField label="Cell H" value={grid.cellHeight} onChange={(next) => updateGrid({ cellHeight: clampPositiveInt(next, grid.cellHeight) })} min={1} />
-          <NumberStepperField label="Offset X" value={grid.offsetX} onChange={(next) => updateGrid({ offsetX: next })} />
-          <NumberStepperField label="Offset Y" value={grid.offsetY} onChange={(next) => updateGrid({ offsetY: next })} />
-          <NumberStepperField label="Gap X" value={grid.gapX} onChange={(next) => updateGrid({ gapX: next })} />
-          <NumberStepperField label="Gap Y" value={grid.gapY} onChange={(next) => updateGrid({ gapY: next })} />
-          <NumberStepperField label="Columns" value={grid.columns} onChange={(next) => updateGrid({ columns: clampPositiveInt(next, grid.columns) })} min={1} />
-          <NumberStepperField label="Rows" value={grid.rows} onChange={(next) => updateGrid({ rows: clampPositiveInt(next, grid.rows) })} min={1} />
-        </div>
-
-        <div className="devtools-bg-config">
-          <label className="devtools-toggle">
-            <input
-              type="checkbox"
-              checked={backgroundRemoval.enabled}
-              onChange={(e) => updateBackgroundRemoval({ enabled: e.target.checked })}
-            />
-            <span>Вырезать фон по цвету из верхнего левого пикселя каждого кадра</span>
-          </label>
-          <NumberStepperField
-            label="Tolerance (0..255)"
-            value={backgroundRemoval.tolerance}
-            min={0}
-            max={255}
-            onChange={(next) => updateBackgroundRemoval({ tolerance: Math.max(0, Math.min(255, next)) })}
-          />
-          <button className="devtools-btn" type="button" onClick={() => regenerateDefaultSprites()}>
-            Сгенерировать список спрайтов по всем кадрам
-          </button>
-        </div>
-        <div className="devtools-confirm-row">
-          <button className="devtools-btn primary" type="button" onClick={confirmSlicingParams}>
-            Подтвердить параметры разрезки
-          </button>
-          <span className="devtools-confirm-status">
-            {!hasConfirmedProcessing
-              ? 'Параметры еще не подтверждены: обработка кадров отключена.'
-              : hasPendingConfigChanges
-                ? 'Параметры изменены после подтверждения: нажмите подтверждение, чтобы пересчитать кадры.'
-                : 'Используются подтвержденные параметры.'}
-          </span>
-        </div>
-      </section>
-
-      <section className="devtools-panel">
-        <h2>3. Кадры атласа (нумерация)</h2>
-        {!hasConfirmedProcessing ? (
-          <p className="devtools-warning">Подтвердите параметры разрезки, чтобы запустить извлечение кадров и удаление фона.</p>
-        ) : null}
-        {hasPendingConfigChanges ? (
-          <p className="devtools-warning">Текущие кадры построены по последним подтвержденным параметрам. Подтвердите новые параметры для пересчета.</p>
-        ) : null}
-        <p className="devtools-hint">Нажмите на кадр, чтобы добавить его в выбранный спрайт.</p>
-        <div className="devtools-frames-grid" style={{ gridTemplateColumns: `repeat(${Math.max(1, confirmedGridInUse.columns)}, minmax(48px, 96px))` }}>
-          {renderedFrames.map((frame) => (
+      <section className="devtools-layout">
+        <div className="devtools-panel devtools-canvas-panel">
+          <h2>2. Атлас, маркеры и навигация</h2>
+          <div className="viewer-toolbar">
+            <button className="devtools-btn tiny" type="button" onClick={() => zoomBy(1.15)}>Zoom +</button>
+            <button className="devtools-btn tiny" type="button" onClick={() => zoomBy(1 / 1.15)}>Zoom -</button>
             <button
-              key={frame.index}
-              className={`devtools-frame ${selectedFrameSet.has(frame.index) ? 'selected' : ''}`}
+              className="devtools-btn tiny"
               type="button"
-              onClick={() => appendFrameToSelectedSprite(frame.index)}
-              title={`Кадр ${frame.index}`}
+              onClick={() => {
+                if (!atlasImage) return;
+                const fitScale = clamp(Math.min(canvasSize.width / atlasImage.width, canvasSize.height / atlasImage.height), VIEW_MIN_SCALE, VIEW_MAX_SCALE);
+                setViewScale(fitScale);
+                setViewOffset({
+                  x: (canvasSize.width - atlasImage.width * fitScale) / 2,
+                  y: (canvasSize.height - atlasImage.height * fitScale) / 2,
+                });
+              }}
             >
-              {frame.dataUrl ? <img src={frame.dataUrl} alt={`frame-${frame.index}`} /> : <span className="empty">N/A</span>}
-              <span className="index">{frame.index}</span>
+              Fit
             </button>
-          ))}
+            <span className="viewer-scale">{Math.round(viewScale * 100)}%</span>
+          </div>
+
+          <div className="atlas-viewport" ref={viewportRef}>
+            {atlasImage ? (
+              <canvas
+                ref={canvasRef}
+                className="devtools-atlas-preview"
+                onPointerDown={onCanvasPointerDown}
+                onPointerMove={onCanvasPointerMove}
+                onPointerUp={onCanvasPointerUp}
+                onPointerCancel={onCanvasPointerUp}
+                onWheel={onCanvasWheel}
+              />
+            ) : (
+              <div className="devtools-atlas-placeholder">Загрузите атлас, чтобы включить редактор маркеров.</div>
+            )}
+          </div>
+
+          <p className="devtools-hint">
+            Якорь двигает позицию кадра. Для последнего перемещенного якоря показывается перекрестие в правом нижнем углу рамки.
+            Перетаскивание перекрестия меняет размеры кадра сразу для всех кадров выбранного спрайта.
+          </p>
         </div>
-      </section>
 
-      <section className="devtools-panel devtools-sprites-panel">
-        <h2>4. Спрайты и анимации</h2>
-        <div className="devtools-sprites-actions">
-          <button className="devtools-btn" type="button" onClick={() => addSprite()}>Добавить спрайт</button>
-        </div>
-        <div className="devtools-sprites-table">
-          <div className="head">Имя</div>
-          <div className="head">Кадры (пример: 1-4, 7, 9-12)</div>
-          <div className="head">FPS</div>
-          <div className="head">Loop</div>
-          <div className="head">Тип</div>
-          <div className="head">Действия</div>
+        <div className="devtools-panel devtools-sprites-panel">
+          <h2>3. Список спрайтов</h2>
+          <div className="devtools-sprites-actions">
+            <button className="devtools-btn" type="button" onClick={() => addSprite()}>Добавить спрайт</button>
+          </div>
 
-          {parsedSprites.map((entry) => {
-            const { sprite, error, frameIndices, type } = entry;
-            const isSelected = sprite.id === selectedSpriteId;
-            const isPreview = sprite.id === selectedPreviewSpriteId;
+          {sprites.length === 0 ? <p className="devtools-hint">Список пуст. Добавьте первый спрайт.</p> : null}
 
-            return (
-              <>
-                <div className={`cell ${isSelected ? 'active' : ''}`}>
+          <div className="sprite-cards">
+            {sprites.map((sprite) => (
+              <div key={sprite.id} className={`sprite-card ${sprite.id === selectedSpriteId ? 'selected' : ''}`}>
+                <label className="devtools-field">
+                  <span>Имя спрайта</span>
                   <input
                     value={sprite.name}
                     onFocus={() => selectSprite(sprite.id)}
                     onChange={(e) => updateSprite(sprite.id, { name: e.target.value })}
                   />
-                </div>
-                <div className={`cell ${isSelected ? 'active' : ''}`}>
-                  <input
-                    value={sprite.frameSpec}
-                    onFocus={() => selectSprite(sprite.id)}
-                    onChange={(e) => updateSprite(sprite.id, { frameSpec: e.target.value })}
-                  />
-                  <div className="inline-meta">
-                    {error ? <span className="invalid">{error}</span> : <span>{frameIndices.join(', ') || '—'}</span>}
-                  </div>
-                </div>
-                <div className={`cell ${isSelected ? 'active' : ''}`}>
-                  <input
-                    type="number"
-                    min={1}
-                    value={sprite.fps}
-                    onFocus={() => selectSprite(sprite.id)}
-                    onChange={(e) => updateSprite(sprite.id, { fps: clampPositiveInt(Number(e.target.value), sprite.fps) })}
-                  />
-                </div>
-                <div className={`cell ${isSelected ? 'active' : ''}`}>
-                  <input
-                    type="checkbox"
-                    checked={sprite.loop}
-                    onFocus={() => selectSprite(sprite.id)}
-                    onChange={(e) => updateSprite(sprite.id, { loop: e.target.checked })}
-                  />
-                </div>
-                <div className={`cell ${isSelected ? 'active' : ''}`}>
-                  <span className={`sprite-type ${type}`}>{type}</span>
-                </div>
-                <div className={`cell ${isSelected ? 'active' : ''} actions`}>
-                  <button
-                    className={`devtools-btn tiny ${isPreview ? 'primary' : ''}`}
-                    type="button"
-                    onClick={() => selectPreviewSprite(sprite.id)}
-                  >
-                    Preview
+                </label>
+
+                <NumberStepperField
+                  label="Количество кадров"
+                  value={sprite.frameCount}
+                  min={1}
+                  onChange={(next) => updateSprite(sprite.id, { frameCount: clampPositiveInt(next, sprite.frameCount), confirmed: false })}
+                />
+
+                <NumberStepperField
+                  label="Ширина кадра"
+                  value={sprite.frameWidth}
+                  min={1}
+                  onChange={(next) => updateSprite(sprite.id, { frameWidth: clampPositiveInt(next, sprite.frameWidth), confirmed: false })}
+                />
+
+                <NumberStepperField
+                  label="Высота кадра"
+                  value={sprite.frameHeight}
+                  min={1}
+                  onChange={(next) => updateSprite(sprite.id, { frameHeight: clampPositiveInt(next, sprite.frameHeight), confirmed: false })}
+                />
+
+                <div className="sprite-card-actions">
+                  <button className="devtools-btn primary" type="button" onClick={() => confirmSprite(sprite)}>
+                    Подтвердить
                   </button>
                   <button className="devtools-btn tiny danger" type="button" onClick={() => deleteSprite(sprite.id)}>
                     Удалить
                   </button>
                 </div>
-              </>
-            );
-          })}
-        </div>
-      </section>
 
-      <section className="devtools-panel">
-        <h2>5. Preview выбранной анимации</h2>
-        {!previewEntry ? <p>Добавьте или выберите спрайт для предпросмотра.</p> : null}
-        {previewEntry ? (
-          <div className="devtools-preview-area">
-            <div className="preview-canvas">
-              {activePreviewFrame ? (
-                <img src={activePreviewFrame} alt={`preview-${previewEntry.sprite.name}`} />
-              ) : (
-                <span>Нет кадров для предпросмотра</span>
-              )}
-            </div>
-            <div className="preview-info">
-              <div><strong>Спрайт:</strong> {previewEntry.sprite.name}</div>
-              <div><strong>Кадры:</strong> {previewEntry.frameIndices.join(', ') || '—'}</div>
-              <div><strong>FPS:</strong> {previewEntry.sprite.fps}</div>
-              <div><strong>Loop:</strong> {previewEntry.sprite.loop ? 'да' : 'нет'}</div>
-              <div className="preview-controls">
-                <button className="devtools-btn" type="button" onClick={() => setIsPlaying((v) => !v)}>
-                  {isPlaying ? 'Пауза' : 'Старт'}
-                </button>
-                <button className="devtools-btn" type="button" onClick={() => setPlaybackFrame(0)}>
-                  С начала
-                </button>
+                <div className="sprite-status">
+                  {sprite.confirmed ? `Маркеров на атласе: ${sprite.anchors.length}` : 'Не подтвержден'}
+                </div>
               </div>
-            </div>
+            ))}
           </div>
-        ) : null}
+        </div>
       </section>
     </div>
   );

@@ -10,3 +10,4 @@
 - 2026w15-0.8 — show atlas preview with slicing grid overlay
 - 2026w15-0.9 — require confirm before slicing and add draggable control points
 - 2026w15-0.10 — improve mobile handle size and repeat guide lines from control points
+- 2026w15-0.11 — redesign atlas tool with zoom pan and anchor crosshair markers

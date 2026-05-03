@@ -1,4 +1,4 @@
-import { ChangeEvent, useEffect, useMemo, useRef, useState } from 'react';
+import { ChangeEvent, PointerEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { useDevtoolsStore } from '../../application/devtoolsStore';
 import {
   buildFrames,
@@ -13,6 +13,17 @@ import './DevtoolsPage.css';
 interface RenderedFrame {
   index: number;
   dataUrl: string;
+}
+
+type DragHandle = 'top-left' | 'bottom-right' | null;
+
+interface NumberStepperFieldProps {
+  label: string;
+  value: number;
+  onChange: (next: number) => void;
+  step?: number;
+  min?: number;
+  max?: number;
 }
 
 const loadImageFromDataUrl = (dataUrl: string): Promise<HTMLImageElement> => {
@@ -72,6 +83,60 @@ const normalizeSprites = (sprites: AtlasDocument['sprites']): SpriteDefinition[]
   }));
 };
 
+const NumberStepperField = ({
+  label,
+  value,
+  onChange,
+  step = 1,
+  min,
+  max,
+}: NumberStepperFieldProps) => {
+  const clamp = (raw: number): number => {
+    let next = raw;
+    if (typeof min === 'number') next = Math.max(min, next);
+    if (typeof max === 'number') next = Math.min(max, next);
+    return next;
+  };
+
+  const changeByStep = (delta: number) => onChange(clamp(value + delta));
+
+  return (
+    <label className="devtools-field devtools-field-stepper">
+      <span>{label}</span>
+      <div className="stepper-control">
+        <button className="devtools-btn tiny" type="button" onClick={() => changeByStep(-step)} aria-label={`${label} minus`}>
+          -
+        </button>
+        <input
+          type="number"
+          value={value}
+          onChange={(e) => {
+            const numeric = Number(e.target.value);
+            if (!Number.isFinite(numeric)) return;
+            onChange(clamp(Math.round(numeric)));
+          }}
+        />
+        <button className="devtools-btn tiny" type="button" onClick={() => changeByStep(step)} aria-label={`${label} plus`}>
+          +
+        </button>
+      </div>
+    </label>
+  );
+};
+
+const isSameGrid = (a: AtlasGridConfig, b: AtlasGridConfig): boolean => {
+  return (
+    a.cellWidth === b.cellWidth &&
+    a.cellHeight === b.cellHeight &&
+    a.offsetX === b.offsetX &&
+    a.offsetY === b.offsetY &&
+    a.gapX === b.gapX &&
+    a.gapY === b.gapY &&
+    a.columns === b.columns &&
+    a.rows === b.rows
+  );
+};
+
 export function DevtoolsPage() {
   const {
     atlasDataUrl,
@@ -98,6 +163,10 @@ export function DevtoolsPage() {
 
   const [atlasImage, setAtlasImageEl] = useState<HTMLImageElement | null>(null);
   const atlasCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const [dragHandle, setDragHandle] = useState<DragHandle>(null);
+  const [confirmedGrid, setConfirmedGrid] = useState<AtlasGridConfig | null>(null);
+  const [confirmedBgTolerance, setConfirmedBgTolerance] = useState<number | null>(null);
+  const [confirmedBgEnabled, setConfirmedBgEnabled] = useState<boolean | null>(null);
   const [errorText, setErrorText] = useState<string>('');
   const [isPlaying, setIsPlaying] = useState(true);
   const [playbackFrame, setPlaybackFrame] = useState(0);
@@ -162,12 +231,44 @@ export function DevtoolsPage() {
         ctx.strokeRect(x + 0.5, y + 0.5, grid.cellWidth, grid.cellHeight);
       }
     }
+
+    const topLeft = { x: grid.offsetX, y: grid.offsetY };
+    const bottomRight = { x: grid.offsetX + grid.cellWidth, y: grid.offsetY + grid.cellHeight };
+
+    const drawHandle = (x: number, y: number, color: string) => {
+      ctx.beginPath();
+      ctx.arc(x, y, 8, 0, Math.PI * 2);
+      ctx.fillStyle = color;
+      ctx.fill();
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = '#0f172a';
+      ctx.stroke();
+    };
+
+    drawHandle(topLeft.x, topLeft.y, '#22d3ee');
+    drawHandle(bottomRight.x, bottomRight.y, '#f59e0b');
   }, [atlasImage, grid]);
 
-  const renderedFrames = useMemo<RenderedFrame[]>(() => {
-    if (!atlasImage) return [];
+  const confirmedGridInUse = confirmedGrid ?? grid;
+  const confirmedBackgroundRemoval = useMemo(
+    () => ({
+      enabled: confirmedBgEnabled ?? backgroundRemoval.enabled,
+      tolerance: confirmedBgTolerance ?? backgroundRemoval.tolerance,
+    }),
+    [backgroundRemoval.enabled, backgroundRemoval.tolerance, confirmedBgEnabled, confirmedBgTolerance]
+  );
 
-    const rawFrames = buildFrames(grid);
+  const hasConfirmedProcessing = Boolean(confirmedGrid);
+  const hasPendingConfigChanges =
+    hasConfirmedProcessing &&
+    (!isSameGrid(grid, confirmedGridInUse) ||
+      confirmedBackgroundRemoval.enabled !== backgroundRemoval.enabled ||
+      confirmedBackgroundRemoval.tolerance !== backgroundRemoval.tolerance);
+
+  const renderedFrames = useMemo<RenderedFrame[]>(() => {
+    if (!atlasImage || !hasConfirmedProcessing) return [];
+
+    const rawFrames = buildFrames(confirmedGridInUse);
 
     return rawFrames.map((frame) => {
       const canvas = document.createElement('canvas');
@@ -192,7 +293,7 @@ export function DevtoolsPage() {
       );
 
       const imageData = ctx.getImageData(0, 0, frame.width, frame.height);
-      const processed = removeBackground(imageData, backgroundRemoval);
+      const processed = removeBackground(imageData, confirmedBackgroundRemoval);
       ctx.putImageData(processed, 0, 0);
 
       return {
@@ -200,14 +301,14 @@ export function DevtoolsPage() {
         dataUrl: canvas.toDataURL('image/png'),
       };
     });
-  }, [atlasImage, grid, backgroundRemoval]);
+  }, [atlasImage, confirmedGridInUse, confirmedBackgroundRemoval, hasConfirmedProcessing]);
 
   const frameMap = useMemo(() => {
     const entries = renderedFrames.map((frame) => [frame.index, frame.dataUrl] as const);
     return new Map<number, string>(entries);
   }, [renderedFrames]);
 
-  const maxFrameIndex = grid.columns * grid.rows;
+  const maxFrameIndex = confirmedGridInUse.columns * confirmedGridInUse.rows;
 
   const parsedSprites = useMemo(() => {
     return sprites.map((sprite) => {
@@ -290,6 +391,9 @@ export function DevtoolsPage() {
         imageHeight: image.height,
       });
       setAtlasImageEl(image);
+      setConfirmedGrid(null);
+      setConfirmedBgEnabled(null);
+      setConfirmedBgTolerance(null);
     } catch (error: unknown) {
       setErrorText(error instanceof Error ? error.message : 'Не удалось загрузить атлас.');
     }
@@ -318,28 +422,105 @@ export function DevtoolsPage() {
         },
         sprites: normalizeSprites(parsed.sprites),
       });
+      setConfirmedGrid(normalizeGrid(parsed.grid));
+      setConfirmedBgEnabled(Boolean(parsed.backgroundRemoval.enabled));
+      setConfirmedBgTolerance(Math.max(0, Math.round(parsed.backgroundRemoval.tolerance)));
     } catch (error: unknown) {
       setErrorText(error instanceof Error ? error.message : 'Не удалось импортировать JSON.');
     }
   };
 
-  const onGridInput = (field: keyof AtlasGridConfig, rawValue: string) => {
-    const numeric = Number(rawValue);
-    if (!Number.isFinite(numeric)) return;
+  const resetTool = () => {
+    reset();
+    setConfirmedGrid(null);
+    setConfirmedBgEnabled(null);
+    setConfirmedBgTolerance(null);
+  };
 
-    if (field === 'columns' || field === 'rows' || field === 'cellWidth' || field === 'cellHeight') {
-      const fallback = grid[field] as number;
-      updateGrid({ [field]: clampPositiveInt(numeric, fallback) } as Partial<AtlasGridConfig>);
+  const updateGridFromHandle = (handle: Exclude<DragHandle, null>, x: number, y: number) => {
+    if (!atlasImage) return;
+    const clampedX = Math.max(0, Math.min(atlasImage.width, Math.round(x)));
+    const clampedY = Math.max(0, Math.min(atlasImage.height, Math.round(y)));
+
+    if (handle === 'top-left') {
+      const right = grid.offsetX + grid.cellWidth;
+      const bottom = grid.offsetY + grid.cellHeight;
+      const nextOffsetX = Math.min(clampedX, right - 1);
+      const nextOffsetY = Math.min(clampedY, bottom - 1);
+      const nextCellWidth = Math.max(1, right - nextOffsetX);
+      const nextCellHeight = Math.max(1, bottom - nextOffsetY);
+      updateGrid({
+        offsetX: nextOffsetX,
+        offsetY: nextOffsetY,
+        cellWidth: nextCellWidth,
+        cellHeight: nextCellHeight,
+      });
       return;
     }
 
-    updateGrid({ [field]: Math.round(numeric) } as Partial<AtlasGridConfig>);
+    const nextCellWidth = Math.max(1, clampedX - grid.offsetX);
+    const nextCellHeight = Math.max(1, clampedY - grid.offsetY);
+    updateGrid({ cellWidth: nextCellWidth, cellHeight: nextCellHeight });
   };
 
-  const onToleranceInput = (rawValue: string) => {
-    const numeric = Number(rawValue);
-    if (!Number.isFinite(numeric)) return;
-    updateBackgroundRemoval({ tolerance: Math.max(0, Math.min(255, Math.round(numeric))) });
+  const locateHandle = (x: number, y: number): DragHandle => {
+    const topLeft = { x: grid.offsetX, y: grid.offsetY };
+    const bottomRight = { x: grid.offsetX + grid.cellWidth, y: grid.offsetY + grid.cellHeight };
+    const radius = 14;
+    const inCircle = (cx: number, cy: number): boolean => {
+      const dx = x - cx;
+      const dy = y - cy;
+      return dx * dx + dy * dy <= radius * radius;
+    };
+
+    if (inCircle(topLeft.x, topLeft.y)) return 'top-left';
+    if (inCircle(bottomRight.x, bottomRight.y)) return 'bottom-right';
+    return null;
+  };
+
+  const getCanvasCoords = (canvas: HTMLCanvasElement, clientX: number, clientY: number) => {
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    return {
+      x: (clientX - rect.left) * scaleX,
+      y: (clientY - rect.top) * scaleY,
+    };
+  };
+
+  const onCanvasPointerDown = (event: PointerEvent<HTMLCanvasElement>) => {
+    if (!atlasImage) return;
+    const canvas = atlasCanvasRef.current;
+    if (!canvas) return;
+    const coords = getCanvasCoords(canvas, event.clientX, event.clientY);
+    const handle = locateHandle(coords.x, coords.y);
+    if (!handle) return;
+    setDragHandle(handle);
+    canvas.setPointerCapture(event.pointerId);
+    event.preventDefault();
+  };
+
+  const onCanvasPointerMove = (event: PointerEvent<HTMLCanvasElement>) => {
+    if (!dragHandle) return;
+    const canvas = atlasCanvasRef.current;
+    if (!canvas) return;
+    const coords = getCanvasCoords(canvas, event.clientX, event.clientY);
+    updateGridFromHandle(dragHandle, coords.x, coords.y);
+    event.preventDefault();
+  };
+
+  const onCanvasPointerUp = (event: PointerEvent<HTMLCanvasElement>) => {
+    const canvas = atlasCanvasRef.current;
+    if (canvas?.hasPointerCapture(event.pointerId)) {
+      canvas.releasePointerCapture(event.pointerId);
+    }
+    setDragHandle(null);
+  };
+
+  const confirmSlicingParams = () => {
+    setConfirmedGrid({ ...grid });
+    setConfirmedBgEnabled(backgroundRemoval.enabled);
+    setConfirmedBgTolerance(backgroundRemoval.tolerance);
   };
 
   const appendFrameToSelectedSprite = (frameIndex: number) => {
@@ -381,7 +562,7 @@ export function DevtoolsPage() {
         </div>
         <div className="devtools-header-actions">
           <a className="devtools-link" href="#/">Вернуться к игре</a>
-          <button className="devtools-btn danger" onClick={() => reset()} type="button">Сбросить</button>
+          <button className="devtools-btn danger" onClick={resetTool} type="button">Сбросить</button>
         </div>
       </header>
 
@@ -416,20 +597,28 @@ export function DevtoolsPage() {
               className="devtools-atlas-preview"
               width={atlasImage.width}
               height={atlasImage.height}
+              onPointerDown={onCanvasPointerDown}
+              onPointerMove={onCanvasPointerMove}
+              onPointerUp={onCanvasPointerUp}
+              onPointerCancel={onCanvasPointerUp}
             />
           ) : (
             <div className="devtools-atlas-placeholder">Загрузите atlas, чтобы увидеть изображение и сетку.</div>
           )}
         </div>
+        <p className="devtools-hint">
+          Перетаскивайте точки: бирюзовая задает верхний левый угол первого кадра, оранжевая задает правый нижний.
+          Тяжелая разрезка и удаление фона запускаются только после подтверждения параметров.
+        </p>
         <div className="devtools-grid-config">
-          <label className="devtools-field"><span>Cell W</span><input type="number" value={grid.cellWidth} onChange={(e) => onGridInput('cellWidth', e.target.value)} /></label>
-          <label className="devtools-field"><span>Cell H</span><input type="number" value={grid.cellHeight} onChange={(e) => onGridInput('cellHeight', e.target.value)} /></label>
-          <label className="devtools-field"><span>Offset X</span><input type="number" value={grid.offsetX} onChange={(e) => onGridInput('offsetX', e.target.value)} /></label>
-          <label className="devtools-field"><span>Offset Y</span><input type="number" value={grid.offsetY} onChange={(e) => onGridInput('offsetY', e.target.value)} /></label>
-          <label className="devtools-field"><span>Gap X</span><input type="number" value={grid.gapX} onChange={(e) => onGridInput('gapX', e.target.value)} /></label>
-          <label className="devtools-field"><span>Gap Y</span><input type="number" value={grid.gapY} onChange={(e) => onGridInput('gapY', e.target.value)} /></label>
-          <label className="devtools-field"><span>Columns</span><input type="number" value={grid.columns} onChange={(e) => onGridInput('columns', e.target.value)} /></label>
-          <label className="devtools-field"><span>Rows</span><input type="number" value={grid.rows} onChange={(e) => onGridInput('rows', e.target.value)} /></label>
+          <NumberStepperField label="Cell W" value={grid.cellWidth} onChange={(next) => updateGrid({ cellWidth: clampPositiveInt(next, grid.cellWidth) })} min={1} />
+          <NumberStepperField label="Cell H" value={grid.cellHeight} onChange={(next) => updateGrid({ cellHeight: clampPositiveInt(next, grid.cellHeight) })} min={1} />
+          <NumberStepperField label="Offset X" value={grid.offsetX} onChange={(next) => updateGrid({ offsetX: next })} />
+          <NumberStepperField label="Offset Y" value={grid.offsetY} onChange={(next) => updateGrid({ offsetY: next })} />
+          <NumberStepperField label="Gap X" value={grid.gapX} onChange={(next) => updateGrid({ gapX: next })} />
+          <NumberStepperField label="Gap Y" value={grid.gapY} onChange={(next) => updateGrid({ gapY: next })} />
+          <NumberStepperField label="Columns" value={grid.columns} onChange={(next) => updateGrid({ columns: clampPositiveInt(next, grid.columns) })} min={1} />
+          <NumberStepperField label="Rows" value={grid.rows} onChange={(next) => updateGrid({ rows: clampPositiveInt(next, grid.rows) })} min={1} />
         </div>
 
         <div className="devtools-bg-config">
@@ -441,20 +630,41 @@ export function DevtoolsPage() {
             />
             <span>Вырезать фон по цвету из верхнего левого пикселя каждого кадра</span>
           </label>
-          <label className="devtools-field small">
-            <span>Tolerance (0..255)</span>
-            <input type="number" value={backgroundRemoval.tolerance} onChange={(e) => onToleranceInput(e.target.value)} />
-          </label>
+          <NumberStepperField
+            label="Tolerance (0..255)"
+            value={backgroundRemoval.tolerance}
+            min={0}
+            max={255}
+            onChange={(next) => updateBackgroundRemoval({ tolerance: Math.max(0, Math.min(255, next)) })}
+          />
           <button className="devtools-btn" type="button" onClick={() => regenerateDefaultSprites()}>
             Сгенерировать список спрайтов по всем кадрам
           </button>
+        </div>
+        <div className="devtools-confirm-row">
+          <button className="devtools-btn primary" type="button" onClick={confirmSlicingParams}>
+            Подтвердить параметры разрезки
+          </button>
+          <span className="devtools-confirm-status">
+            {!hasConfirmedProcessing
+              ? 'Параметры еще не подтверждены: обработка кадров отключена.'
+              : hasPendingConfigChanges
+                ? 'Параметры изменены после подтверждения: нажмите подтверждение, чтобы пересчитать кадры.'
+                : 'Используются подтвержденные параметры.'}
+          </span>
         </div>
       </section>
 
       <section className="devtools-panel">
         <h2>3. Кадры атласа (нумерация)</h2>
+        {!hasConfirmedProcessing ? (
+          <p className="devtools-warning">Подтвердите параметры разрезки, чтобы запустить извлечение кадров и удаление фона.</p>
+        ) : null}
+        {hasPendingConfigChanges ? (
+          <p className="devtools-warning">Текущие кадры построены по последним подтвержденным параметрам. Подтвердите новые параметры для пересчета.</p>
+        ) : null}
         <p className="devtools-hint">Нажмите на кадр, чтобы добавить его в выбранный спрайт.</p>
-        <div className="devtools-frames-grid" style={{ gridTemplateColumns: `repeat(${Math.max(1, grid.columns)}, minmax(48px, 96px))` }}>
+        <div className="devtools-frames-grid" style={{ gridTemplateColumns: `repeat(${Math.max(1, confirmedGridInUse.columns)}, minmax(48px, 96px))` }}>
           {renderedFrames.map((frame) => (
             <button
               key={frame.index}

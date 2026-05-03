@@ -28,7 +28,10 @@ npm run bump:build -- --desc "description"  # version bump
 - Open `#/devtools` in the app or use the `Devtool` badge from the game header.
 - Upload an atlas image (PNG/JPG/WebP), then configure slicing: cell size, offsets, gaps, columns, rows.
 - The loaded atlas is shown immediately with a live slicing grid overlay based on current parameters.
+- Two draggable control points are available for mobile-friendly setup: top-left and bottom-right corners of the first sprite.
+- Heavy frame extraction and background removal run only after explicit confirmation of slicing parameters.
 - Background cleanup supports color-key removal sampled from each frame top-left pixel with adjustable tolerance.
+- Numeric fields include `+`/`-` steppers for precise changes.
 - Each extracted frame is auto-numbered; create named sprites and define frame sequences (`1-4,7,9-12`).
 - Mark loop/fps and preview playback for any selected sprite animation.
 - Export/import atlas metadata as JSON (grid settings, background removal settings, sprite definitions).

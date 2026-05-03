@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 /* eslint-disable */
-const fs = require('fs');
-const path = require('path');
-const { execSync } = require('child_process');
+import fs from 'node:fs';
+import path from 'node:path';
+import { execSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 
 const args = process.argv.slice(2);
 const isMinor = args.includes('--minor');
@@ -11,6 +12,8 @@ const stagedOnly = args.includes('--commit-staged-only');
 const descIdx = args.indexOf('--desc');
 const desc = descIdx !== -1 ? args[descIdx + 1] : 'build update';
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 const root = path.resolve(__dirname, '..');
 const versionPath = path.join(root, 'version.json');
 const packagePath = path.join(root, 'package.json');

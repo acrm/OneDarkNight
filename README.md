@@ -2,6 +2,13 @@
 
 A horror text-adventure PWA. Survive 5 nights in a house with hidden rules.
 
+## Current Mechanics Snapshot
+- Mixed consequence model: instant fatal, deferred fatal, escalation, reversible branch
+- TV night system with horror broadcasts and entity breach scenes
+- Rule-driven nights: peephole, bathroom mirror window, TV lockout behavior
+- Day resource loop (salt/food/random items) impacting night choices
+- Room context UI (current room + nearby rooms)
+
 ## Setup
 ```bash
 npm install

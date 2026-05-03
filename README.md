@@ -29,6 +29,8 @@ npm run bump:build -- --desc "description"  # version bump
 - Upload an atlas image (PNG/JPG/WebP), then configure slicing: cell size, offsets, gaps, columns, rows.
 - The loaded atlas is shown immediately with a live slicing grid overlay based on current parameters.
 - Two draggable control points are available for mobile-friendly setup: top-left and bottom-right corners of the first sprite.
+- Control points now use UI-sized touch targets for easier dragging on mobile screens.
+- Each control point emits one horizontal and one vertical guide line; all other guide lines repeat with the same spacing between these two reference lines.
 - Heavy frame extraction and background removal run only after explicit confirmation of slicing parameters.
 - Background cleanup supports color-key removal sampled from each frame top-left pixel with adjustable tolerance.
 - Numeric fields include `+`/`-` steppers for precise changes.

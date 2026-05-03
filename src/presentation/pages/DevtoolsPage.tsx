@@ -26,6 +26,9 @@ interface NumberStepperFieldProps {
   max?: number;
 }
 
+const HANDLE_VISUAL_RADIUS_UI = 14;
+const HANDLE_HIT_RADIUS_UI = 28;
+
 const loadImageFromDataUrl = (dataUrl: string): Promise<HTMLImageElement> => {
   return new Promise((resolve, reject) => {
     const image = new Image();
@@ -81,6 +84,22 @@ const normalizeSprites = (sprites: AtlasDocument['sprites']): SpriteDefinition[]
     fps: clampPositiveInt(sprite.fps, 6),
     loop: Boolean(sprite.loop),
   }));
+};
+
+const getCanvasScale = (canvas: HTMLCanvasElement): { scaleX: number; scaleY: number } => {
+  const rect = canvas.getBoundingClientRect();
+  if (rect.width <= 0 || rect.height <= 0) {
+    return { scaleX: 1, scaleY: 1 };
+  }
+  return {
+    scaleX: canvas.width / rect.width,
+    scaleY: canvas.height / rect.height,
+  };
+};
+
+const uiPxToCanvasPx = (canvas: HTMLCanvasElement, px: number): number => {
+  const { scaleX, scaleY } = getCanvasScale(canvas);
+  return px * ((scaleX + scaleY) / 2);
 };
 
 const NumberStepperField = ({
@@ -214,30 +233,57 @@ export function DevtoolsPage() {
     ctx.imageSmoothingEnabled = false;
     ctx.drawImage(atlasImage, 0, 0);
 
-    const outline = '#73c2ff';
-    const shadow = '#10243f';
-
-    for (let row = 0; row < grid.rows; row += 1) {
-      for (let col = 0; col < grid.columns; col += 1) {
-        const x = grid.offsetX + col * (grid.cellWidth + grid.gapX);
-        const y = grid.offsetY + row * (grid.cellHeight + grid.gapY);
-
-        ctx.strokeStyle = shadow;
-        ctx.lineWidth = 2;
-        ctx.strokeRect(x, y, grid.cellWidth, grid.cellHeight);
-
-        ctx.strokeStyle = outline;
-        ctx.lineWidth = 1;
-        ctx.strokeRect(x + 0.5, y + 0.5, grid.cellWidth, grid.cellHeight);
-      }
-    }
-
     const topLeft = { x: grid.offsetX, y: grid.offsetY };
     const bottomRight = { x: grid.offsetX + grid.cellWidth, y: grid.offsetY + grid.cellHeight };
 
+    const stepX = Math.max(1, bottomRight.x - topLeft.x);
+    const stepY = Math.max(1, bottomRight.y - topLeft.y);
+
+    const drawVerticalLine = (x: number, color: string, lineWidth: number) => {
+      ctx.strokeStyle = color;
+      ctx.lineWidth = lineWidth;
+      ctx.beginPath();
+      ctx.moveTo(x + 0.5, 0);
+      ctx.lineTo(x + 0.5, height);
+      ctx.stroke();
+    };
+
+    const drawHorizontalLine = (y: number, color: string, lineWidth: number) => {
+      ctx.strokeStyle = color;
+      ctx.lineWidth = lineWidth;
+      ctx.beginPath();
+      ctx.moveTo(0, y + 0.5);
+      ctx.lineTo(width, y + 0.5);
+      ctx.stroke();
+    };
+
+    const drawRepeatingLines = (
+      origin: number,
+      step: number,
+      limit: number,
+      drawLine: (value: number, color: string, lineWidth: number) => void
+    ) => {
+      for (let v = origin; v <= limit; v += step) {
+        drawLine(v, '#2a446f', 1);
+      }
+      for (let v = origin - step; v >= 0; v -= step) {
+        drawLine(v, '#2a446f', 1);
+      }
+    };
+
+    drawRepeatingLines(topLeft.x, stepX, width - 1, drawVerticalLine);
+    drawRepeatingLines(topLeft.y, stepY, height - 1, drawHorizontalLine);
+
+    drawVerticalLine(topLeft.x, '#34d6ff', 2);
+    drawHorizontalLine(topLeft.y, '#34d6ff', 2);
+    drawVerticalLine(bottomRight.x, '#ffb74d', 2);
+    drawHorizontalLine(bottomRight.y, '#ffb74d', 2);
+
+    const handleRadius = Math.max(8, uiPxToCanvasPx(canvas, HANDLE_VISUAL_RADIUS_UI));
+
     const drawHandle = (x: number, y: number, color: string) => {
       ctx.beginPath();
-      ctx.arc(x, y, 8, 0, Math.PI * 2);
+      ctx.arc(x, y, handleRadius, 0, Math.PI * 2);
       ctx.fillStyle = color;
       ctx.fill();
       ctx.lineWidth = 2;
@@ -464,9 +510,11 @@ export function DevtoolsPage() {
   };
 
   const locateHandle = (x: number, y: number): DragHandle => {
+    const canvas = atlasCanvasRef.current;
+    if (!canvas) return null;
     const topLeft = { x: grid.offsetX, y: grid.offsetY };
     const bottomRight = { x: grid.offsetX + grid.cellWidth, y: grid.offsetY + grid.cellHeight };
-    const radius = 14;
+    const radius = Math.max(12, uiPxToCanvasPx(canvas, HANDLE_HIT_RADIUS_UI));
     const inCircle = (cx: number, cy: number): boolean => {
       const dx = x - cx;
       const dy = y - cy;
@@ -608,6 +656,7 @@ export function DevtoolsPage() {
         </div>
         <p className="devtools-hint">
           Перетаскивайте точки: бирюзовая задает верхний левый угол первого кадра, оранжевая задает правый нижний.
+          От каждой точки идут опорные вертикальная и горизонтальная линии, остальные линии повторяются с тем же шагом.
           Тяжелая разрезка и удаление фона запускаются только после подтверждения параметров.
         </p>
         <div className="devtools-grid-config">

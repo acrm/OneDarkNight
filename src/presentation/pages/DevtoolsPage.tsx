@@ -195,6 +195,10 @@ export function DevtoolsPage() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const selectedSprite = sprites.find((sprite) => sprite.id === selectedSpriteId) ?? null;
 
+  const getSpriteAnchors = (sprite: SpriteDefinition): Array<{ x: number; y: number }> => {
+    return Array.isArray(sprite.anchors) ? sprite.anchors : [];
+  };
+
   useEffect(() => {
     let cancelled = false;
     if (!atlasDataUrl) {
@@ -243,8 +247,9 @@ export function DevtoolsPage() {
   }, [atlasImage, canvasSize.height, canvasSize.width]);
 
   const markerModel = useMemo(() => {
+    const selectedAnchors = selectedSprite ? getSpriteAnchors(selectedSprite) : [];
     const selectedConfirmedSprite =
-      selectedSprite && selectedSprite.confirmed && selectedSprite.anchors.length > 0
+      selectedSprite && selectedSprite.confirmed && selectedAnchors.length > 0
         ? selectedSprite
         : null;
 
@@ -252,21 +257,23 @@ export function DevtoolsPage() {
       return { selectedConfirmedSprite: null, activeFrameIndex: null as number | null };
     }
 
-    if (selectedConfirmedSprite.anchors[selectedFrameIndex]) {
+    const anchors = getSpriteAnchors(selectedConfirmedSprite);
+
+    if (anchors[selectedFrameIndex]) {
       return { selectedConfirmedSprite, activeFrameIndex: selectedFrameIndex };
     }
 
     if (
       lastMovedAnchor &&
       lastMovedAnchor.spriteId === selectedConfirmedSprite.id &&
-      selectedConfirmedSprite.anchors[lastMovedAnchor.frameIndex]
+      anchors[lastMovedAnchor.frameIndex]
     ) {
       return { selectedConfirmedSprite, activeFrameIndex: lastMovedAnchor.frameIndex };
     }
 
     return {
       selectedConfirmedSprite,
-      activeFrameIndex: selectedConfirmedSprite.anchors.length > 0 ? 0 : null,
+      activeFrameIndex: anchors.length > 0 ? 0 : null,
     };
   }, [lastMovedAnchor, selectedFrameIndex, selectedSprite]);
 
@@ -303,8 +310,9 @@ export function DevtoolsPage() {
 
     const sprite = markerModel.selectedConfirmedSprite;
     if (sprite) {
-      for (let idx = 0; idx < sprite.anchors.length; idx += 1) {
-        const anchor = sprite.anchors[idx];
+      const anchors = getSpriteAnchors(sprite);
+      for (let idx = 0; idx < anchors.length; idx += 1) {
+        const anchor = anchors[idx];
         const left = anchor.x - sprite.frameWidth / 2;
         const top = anchor.y - sprite.frameHeight / 2;
         const right = left + sprite.frameWidth;
@@ -388,8 +396,9 @@ export function DevtoolsPage() {
     if (markerModel.selectedConfirmedSprite && markerModel.activeFrameIndex !== null) {
       const sprite = markerModel.selectedConfirmedSprite;
       const frameIndex = markerModel.activeFrameIndex;
-      if (sprite.anchors[frameIndex]) {
-        const anchor = sprite.anchors[frameIndex];
+      const anchors = getSpriteAnchors(sprite);
+      if (anchors[frameIndex]) {
+        const anchor = anchors[frameIndex];
         const cross = worldToUi(anchor.x + sprite.frameWidth / 2, anchor.y + sprite.frameHeight / 2);
         const dx = x - cross.x;
         const dy = y - cross.y;
@@ -401,8 +410,9 @@ export function DevtoolsPage() {
 
     const sprite = markerModel.selectedConfirmedSprite;
     if (sprite) {
-      for (let i = 0; i < sprite.anchors.length; i += 1) {
-        const anchorUi = worldToUi(sprite.anchors[i].x, sprite.anchors[i].y);
+      const anchors = getSpriteAnchors(sprite);
+      for (let i = 0; i < anchors.length; i += 1) {
+        const anchorUi = worldToUi(anchors[i].x, anchors[i].y);
         const dx = x - anchorUi.x;
         const dy = y - anchorUi.y;
         if (dx * dx + dy * dy <= MARKER_HIT_RADIUS_UI * MARKER_HIT_RADIUS_UI) {
@@ -417,12 +427,14 @@ export function DevtoolsPage() {
   const updateAnchor = (spriteId: string, frameIndex: number, worldX: number, worldY: number) => {
     if (!atlasImage) return;
     const sprite = sprites.find((item) => item.id === spriteId);
-    if (!sprite || !sprite.anchors[frameIndex]) return;
+    if (!sprite) return;
+    const currentAnchors = getSpriteAnchors(sprite);
+    if (!currentAnchors[frameIndex]) return;
 
     const clampedX = clamp(worldX, sprite.frameWidth / 2, atlasImage.width - sprite.frameWidth / 2);
     const clampedY = clamp(worldY, sprite.frameHeight / 2, atlasImage.height - sprite.frameHeight / 2);
 
-    const anchors = sprite.anchors.map((point, idx) => (idx === frameIndex ? { x: clampedX, y: clampedY } : point));
+    const anchors = currentAnchors.map((point, idx) => (idx === frameIndex ? { x: clampedX, y: clampedY } : point));
     updateSprite(spriteId, { anchors, confirmed: true });
     setLastMovedAnchor({ spriteId, frameIndex });
     setSelectedFrameIndex(frameIndex);
@@ -431,9 +443,11 @@ export function DevtoolsPage() {
   const updateSpriteSizeFromCrosshair = (spriteId: string, frameIndex: number, worldX: number, worldY: number) => {
     if (!atlasImage) return;
     const sprite = sprites.find((item) => item.id === spriteId);
-    if (!sprite || !sprite.anchors[frameIndex]) return;
+    if (!sprite) return;
+    const anchors = getSpriteAnchors(sprite);
+    if (!anchors[frameIndex]) return;
 
-    const anchor = sprite.anchors[frameIndex];
+    const anchor = anchors[frameIndex];
     const frameWidth = clampPositiveInt(Math.round((worldX - anchor.x) * 2), sprite.frameWidth);
     const frameHeight = clampPositiveInt(Math.round((worldY - anchor.y) * 2), sprite.frameHeight);
 
@@ -650,10 +664,12 @@ export function DevtoolsPage() {
 
   const addFrame = () => {
     if (!selectedSprite || !atlasImage) return;
-    const frameCount = selectedSprite.frameCount + 1;
-    const frameWidth = clampPositiveInt(selectedSprite.frameWidth, 1);
-    const frameHeight = clampPositiveInt(selectedSprite.frameHeight, 1);
-    let anchors = selectedSprite.anchors.slice(0, frameCount);
+    const baseFrameCount = clampPositiveInt(selectedSprite.frameCount, 1);
+    const frameCount = baseFrameCount + 1;
+    const frameWidth = clampPositiveInt(selectedSprite.frameWidth, grid.cellWidth);
+    const frameHeight = clampPositiveInt(selectedSprite.frameHeight, grid.cellHeight);
+    const existingAnchors = getSpriteAnchors(selectedSprite);
+    let anchors = existingAnchors.slice(0, frameCount);
     if (anchors.length < frameCount) {
       const initial = createInitialAnchors(frameCount, frameWidth, frameHeight, atlasImage.width, atlasImage.height);
       anchors = anchors.concat(initial.slice(anchors.length));
@@ -674,7 +690,8 @@ export function DevtoolsPage() {
     const frameCount = clampPositiveInt(sprite.frameCount, 1);
     const frameWidth = clampPositiveInt(sprite.frameWidth, grid.cellWidth);
     const frameHeight = clampPositiveInt(sprite.frameHeight, grid.cellHeight);
-    let anchors = sprite.anchors.slice(0, frameCount);
+    const existingAnchors = getSpriteAnchors(sprite);
+    let anchors = existingAnchors.slice(0, frameCount);
     if (anchors.length < frameCount) {
       const initial = createInitialAnchors(frameCount, frameWidth, frameHeight, atlasImage.width, atlasImage.height);
       anchors = anchors.concat(initial.slice(anchors.length));
@@ -716,6 +733,10 @@ export function DevtoolsPage() {
     deleteSprite(selectedSprite.id);
     setDeleteConfirmSpriteId(null);
   };
+
+  const selectedSpriteFrameCount = selectedSprite ? clampPositiveInt(selectedSprite.frameCount, 1) : 0;
+  const selectedSpriteFrameWidth = selectedSprite ? clampPositiveInt(selectedSprite.frameWidth, grid.cellWidth) : grid.cellWidth;
+  const selectedSpriteFrameHeight = selectedSprite ? clampPositiveInt(selectedSprite.frameHeight, grid.cellHeight) : grid.cellHeight;
 
   return (
     <div className="devtools-page">
@@ -778,32 +799,37 @@ export function DevtoolsPage() {
                 </label>
                 <NumberStepperField
                   label="Ширина"
-                  value={selectedSprite.frameWidth}
+                  value={selectedSpriteFrameWidth}
                   fallbackValue={grid.cellWidth}
                   min={1}
-                  onChange={(next) => updateSprite(selectedSprite.id, { frameWidth: clampPositiveInt(next, selectedSprite.frameWidth), confirmed: false })}
+                  onChange={(next) => updateSprite(selectedSprite.id, { frameWidth: clampPositiveInt(next, selectedSpriteFrameWidth), confirmed: false })}
                   onBlurCommit={(next) => {
                     if (atlasImage) ensureSpriteDefaults({ ...selectedSprite, frameWidth: next }, selectedFrameIndex);
                   }}
                 />
                 <NumberStepperField
                   label="Высота"
-                  value={selectedSprite.frameHeight}
+                  value={selectedSpriteFrameHeight}
                   fallbackValue={grid.cellHeight}
                   min={1}
-                  onChange={(next) => updateSprite(selectedSprite.id, { frameHeight: clampPositiveInt(next, selectedSprite.frameHeight), confirmed: false })}
+                  onChange={(next) => updateSprite(selectedSprite.id, { frameHeight: clampPositiveInt(next, selectedSpriteFrameHeight), confirmed: false })}
                   onBlurCommit={(next) => {
                     if (atlasImage) ensureSpriteDefaults({ ...selectedSprite, frameHeight: next }, selectedFrameIndex);
                   }}
                 />
-                <span className="sprite-status">{selectedSprite.confirmed ? `Маркеров: ${selectedSprite.anchors.length}` : 'Не подтвержден'}</span>
-
                 <div className="delete-slot">
+                  <button
+                    className={`devtools-btn tiny icon-btn ${deleteConfirmSpriteId === selectedSprite.id ? '' : 'ghost-btn'}`}
+                    type="button"
+                    title="Отмена удаления"
+                    onClick={() => setDeleteConfirmSpriteId(null)}
+                    disabled={deleteConfirmSpriteId !== selectedSprite.id}
+                    aria-hidden={deleteConfirmSpriteId !== selectedSprite.id}
+                  >
+                    x
+                  </button>
                   {deleteConfirmSpriteId === selectedSprite.id ? (
-                    <>
-                      <button className="devtools-btn tiny" type="button" onClick={() => setDeleteConfirmSpriteId(null)}>Отмена</button>
-                      <button className="devtools-btn tiny danger" type="button" onClick={handleConfirmDelete}>Удалить</button>
-                    </>
+                    <button className="devtools-btn tiny danger icon-btn" type="button" title="Подтвердить удаление" onClick={handleConfirmDelete}>v</button>
                   ) : (
                     <button
                       className="devtools-btn tiny danger icon-btn"
@@ -811,7 +837,7 @@ export function DevtoolsPage() {
                       title="Удалить спрайт"
                       onClick={() => setDeleteConfirmSpriteId(selectedSprite.id)}
                     >
-                      x
+                      -
                     </button>
                   )}
                 </div>
@@ -824,7 +850,7 @@ export function DevtoolsPage() {
           <div className="frame-selector-bar">
             {selectedSprite ? (
               <>
-                {Array.from({ length: selectedSprite.frameCount }, (_, i) => (
+                {Array.from({ length: selectedSpriteFrameCount }, (_, i) => (
                   <button
                     key={i}
                     type="button"

@@ -230,7 +230,14 @@ export function DevtoolsPage() {
   const [errorText, setErrorText] = useState('');
   const [lastMovedAnchor, setLastMovedAnchor] = useState<LastMovedAnchor | null>(null);
   const [dragState, setDragState] = useState<DragState | null>(null);
-  const [deleteConfirmSpriteId, setDeleteConfirmSpriteId] = useState<string | null>(null);
+  
+  // Bulk Delete State
+  const [isDeleteMode, setIsDeleteMode] = useState(false);
+  const [spritesToDelete, setSpritesToDelete] = useState<Set<string>>(new Set());
+
+  // Preview State
+  const [isPlaying, setIsPlaying] = useState(false);
+
   const [viewScale, setViewScale] = useState(1);
   const [viewOffset, setViewOffset] = useState({ x: 0, y: 0 });
   const [canvasSize, setCanvasSize] = useState({ width: 600, height: 420 });
@@ -689,7 +696,8 @@ export function DevtoolsPage() {
       });
       setLastMovedAnchor(null);
       setSelectedFrameIndex(0);
-      setDeleteConfirmSpriteId(null);
+      setIsDeleteMode(false);
+      setSpritesToDelete(new Set());
     } catch (error: unknown) {
       setErrorText(error instanceof Error ? error.message : 'Не удалось импортировать JSON.');
     }
@@ -716,7 +724,8 @@ export function DevtoolsPage() {
     setLastMovedAnchor(null);
     setErrorText('');
     setSelectedFrameIndex(0);
-    setDeleteConfirmSpriteId(null);
+    setIsDeleteMode(false);
+    setSpritesToDelete(new Set());
   };
 
   const fitView = () => {
@@ -784,7 +793,20 @@ export function DevtoolsPage() {
   const handleSelectSprite = (sprite: SpriteDefinition) => {
     selectSprite(sprite.id);
     setSelectedFrameIndex(0);
-    setDeleteConfirmSpriteId(null);
+    setIsPlaying(false);
+    
+    if (isDeleteMode) {
+      setSpritesToDelete((prev) => {
+        const next = new Set(prev);
+        if (next.has(sprite.id)) {
+          next.delete(sprite.id);
+        } else {
+          next.add(sprite.id);
+        }
+        return next;
+      });
+    }
+
     if (atlasImage) {
       ensureSpriteDefaults(sprite, 0);
       return;
@@ -795,19 +817,47 @@ export function DevtoolsPage() {
   const handleAddSprite = () => {
     addSprite();
     setSelectedFrameIndex(0);
-    setDeleteConfirmSpriteId(null);
+    setIsPlaying(false);
+    setIsDeleteMode(false);
+    setSpritesToDelete(new Set());
     setLastMovedAnchor(null);
   };
 
-  const handleConfirmDelete = () => {
-    if (!selectedSprite) return;
-    deleteSprite(selectedSprite.id);
-    setDeleteConfirmSpriteId(null);
+  const toggleDeleteMode = () => {
+    if (isDeleteMode) {
+      setIsDeleteMode(false);
+      setSpritesToDelete(new Set());
+    } else {
+      setIsDeleteMode(true);
+      setSpritesToDelete(new Set(selectedSpriteId ? [selectedSpriteId] : []));
+    }
+  };
+
+  const handleConfirmBulkDelete = () => {
+    spritesToDelete.forEach((id) => deleteSprite(id));
+    setIsDeleteMode(false);
+    setSpritesToDelete(new Set());
+    setIsPlaying(false);
   };
 
   const selectedSpriteFrameCount = selectedSprite ? clampPositiveInt(selectedSprite.frameCount, 1) : 0;
   const selectedSpriteFrameWidth = selectedSprite ? clampPositiveInt(selectedSprite.frameWidth, grid.cellWidth) : grid.cellWidth;
   const selectedSpriteFrameHeight = selectedSprite ? clampPositiveInt(selectedSprite.frameHeight, grid.cellHeight) : grid.cellHeight;
+  const previewFps = selectedSprite ? clampPositiveInt(selectedSprite.fps, 6) : 6;
+
+  // Render loop for preview playback
+  useEffect(() => {
+    if (!isPlaying || !selectedSprite || selectedSpriteFrameCount <= 1) return;
+    const interval = setInterval(() => {
+      setSelectedFrameIndex((prev) => (prev + 1) % selectedSpriteFrameCount);
+    }, 1000 / previewFps);
+    return () => clearInterval(interval);
+  }, [isPlaying, selectedSprite, selectedSpriteFrameCount, previewFps]);
+
+  const advanceFrame = (delta: number) => {
+    if (!selectedSprite || selectedSpriteFrameCount <= 1) return;
+    setSelectedFrameIndex((prev) => (prev + delta + selectedSpriteFrameCount) % selectedSpriteFrameCount);
+  };
 
   return (
     <div className="devtools-page">
@@ -845,13 +895,49 @@ export function DevtoolsPage() {
                 <button
                   key={sprite.id}
                   type="button"
-                  className={`sprite-chip${sprite.id === selectedSpriteId ? ' active' : ''}`}
+                  className={`sprite-chip${sprite.id === selectedSpriteId ? ' active' : ''}${isDeleteMode && spritesToDelete.has(sprite.id) ? ' marked-delete' : ''}`}
                   onClick={() => handleSelectSprite(sprite)}
                 >
                   {sprite.name || 'unnamed'}
                 </button>
               ))}
-              <button className="devtools-btn tiny" type="button" onClick={handleAddSprite}>+ Спрайт</button>
+              {!isDeleteMode && (
+                <button className="devtools-btn tiny" type="button" onClick={handleAddSprite}>+ Спрайт</button>
+              )}
+              
+              <div className="delete-slot">
+                {isDeleteMode ? (
+                  <>
+                    <button 
+                      className="devtools-btn tiny danger icon-btn delete-confirm-btn" 
+                      type="button" 
+                      onClick={handleConfirmBulkDelete}
+                      disabled={spritesToDelete.size === 0}
+                      title={`Удалить (${spritesToDelete.size})`}
+                    >
+                      <i className="fa-solid fa-check" aria-hidden="true" />
+                      {spritesToDelete.size > 0 && <span className="delete-badge">{spritesToDelete.size}</span>}
+                    </button>
+                    <button 
+                      className="devtools-btn tiny icon-btn delete-cancel-btn" 
+                      type="button" 
+                      title="Отмена удаления" 
+                      onClick={toggleDeleteMode}
+                    >
+                      <i className="fa-solid fa-xmark" aria-hidden="true" />
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    className="devtools-btn tiny danger icon-btn delete-trash-btn"
+                    type="button"
+                    title="Удалить спрайты"
+                    onClick={toggleDeleteMode}
+                  >
+                    <i className="fa-solid fa-trash-can" aria-hidden="true" />
+                  </button>
+                )}
+              </div>
             </div>
           </div>
 
@@ -891,42 +977,47 @@ export function DevtoolsPage() {
                       if (atlasImage) ensureSpriteDefaults({ ...selectedSprite, frameHeight: next }, selectedFrameIndex);
                     }}
                   />
-                  <div className="delete-slot">
-                    {deleteConfirmSpriteId === selectedSprite.id ? (
-                      <>
-                        <button className="devtools-btn tiny danger icon-btn delete-confirm-btn" type="button" title="Подтвердить удаление" onClick={handleConfirmDelete}>
-                          <i className="fa-solid fa-check" aria-hidden="true" />
-                        </button>
-                        <button className="devtools-btn tiny icon-btn delete-cancel-btn" type="button" title="Отмена удаления" onClick={() => setDeleteConfirmSpriteId(null)}>
-                          <i className="fa-solid fa-xmark" aria-hidden="true" />
-                        </button>
-                      </>
-                    ) : (
-                      <button
-                        className="devtools-btn tiny danger icon-btn delete-trash-btn"
-                        type="button"
-                        title="Удалить спрайт"
-                        onClick={() => setDeleteConfirmSpriteId(selectedSprite.id)}
-                      >
-                        <i className="fa-solid fa-trash-can" aria-hidden="true" />
-                      </button>
-                    )}
-                  </div>
                 </div>
                 
                 <div className="devtools-sprite-preview">
-                  {atlasDataUrl && getSpriteAnchors(selectedSprite)[selectedFrameIndex] ? (
-                    <div
-                      className="sprite-preview-image"
-                      style={{
-                        width: `${selectedSpriteFrameWidth}px`,
-                        height: `${selectedSpriteFrameHeight}px`,
-                        backgroundImage: `url(${atlasDataUrl})`,
-                        backgroundPosition: `-${getSpriteAnchors(selectedSprite)[selectedFrameIndex].x - selectedSpriteFrameWidth / 2}px -${getSpriteAnchors(selectedSprite)[selectedFrameIndex].y - selectedSpriteFrameHeight / 2}px`,
-                        backgroundSize: `${imageWidth}px ${imageHeight}px`
-                      }}
-                    />
-                  ) : <span className="devtools-hint">Нет превью</span>}
+                  <div className="sprite-preview-container">
+                    {atlasDataUrl && getSpriteAnchors(selectedSprite)[selectedFrameIndex] ? (
+                      <div
+                        className="sprite-preview-image"
+                        style={{
+                          width: `${selectedSpriteFrameWidth}px`,
+                          height: `${selectedSpriteFrameHeight}px`,
+                          backgroundImage: `url(${atlasDataUrl})`,
+                          backgroundPosition: `-${getSpriteAnchors(selectedSprite)[selectedFrameIndex].x - selectedSpriteFrameWidth / 2}px -${getSpriteAnchors(selectedSprite)[selectedFrameIndex].y - selectedSpriteFrameHeight / 2}px`,
+                          backgroundSize: `${imageWidth}px ${imageHeight}px`
+                        }}
+                      />
+                    ) : <span className="devtools-hint">Нет превью</span>}
+                  </div>
+                  <div className="sprite-preview-controls">
+                    <button className="devtools-btn tiny icon-btn" type="button" onClick={() => advanceFrame(-1)}>
+                      <i className="fa-solid fa-backward-step"></i>
+                    </button>
+                    <button className={`devtools-btn tiny icon-btn ${isPlaying ? 'playing' : ''}`} type="button" onClick={() => setIsPlaying(!isPlaying)}>
+                      <i className={`fa-solid ${isPlaying ? 'fa-stop' : 'fa-play'}`}></i>
+                    </button>
+                    <button className="devtools-btn tiny icon-btn" type="button" onClick={() => advanceFrame(1)}>
+                      <i className="fa-solid fa-forward-step"></i>
+                    </button>
+                    <label className="preview-fps-label" title="Кадров в секунду">
+                      <input 
+                        type="number" 
+                        min="1" 
+                        max="60" 
+                        value={previewFps} 
+                        onChange={(e) => {
+                          const fps = clampPositiveInt(Number(e.target.value), previewFps);
+                          updateSprite(selectedSprite.id, { fps });
+                        }} 
+                      />
+                      <span className="fps-text">fps</span>
+                    </label>
+                  </div>
                 </div>
               </div>
             ) : (

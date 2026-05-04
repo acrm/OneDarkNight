@@ -19,3 +19,4 @@
 - 2026w15-0.17 — improve devtools visual hierarchy and delete button usability
 - 2026w15-0.18 — make devtools visuals clearly stronger
 - 2026w15-0.19 — ui layout refinement: compact header, reduced marker sizes and inner icons, inline edit controls + right pane sprite preview
+- 2026w15-0.20 — make atlas preview 50vh, add sprite playback controls, add bulk delete mode in sprite list

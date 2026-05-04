@@ -111,7 +111,8 @@
 }
 
 .devtools-control-zone {
-  flex-shrink: 0;
+  flex: 1;
+  overflow-y: auto;
   background: #12122a;
   border-bottom: 1px solid #252540;
 }
@@ -158,13 +159,75 @@
 .devtools-sprite-preview {
   flex: 1;
   display: flex;
-  align-items: center;
-  justify-content: center;
+  flex-direction: column;
   background: #0b0c16;
   border-left: 1px solid #252540;
-  padding: 0.25rem;
   min-height: 50px;
   overflow: hidden;
+}
+
+.sprite-preview-container {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.5rem;
+  overflow: hidden;
+}
+
+.sprite-preview-controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  padding: 0.35rem;
+  background: #171825;
+  border-top: 1px solid #252540;
+}
+
+.preview-fps-label {
+  display: flex;
+  align-items: center;
+  gap: 0.2rem;
+  margin-left: 0.5rem;
+}
+
+.preview-fps-label input {
+  width: 40px;
+  text-align: center;
+  background: #0b0c16;
+  border: 1px solid #323255;
+  color: #fff;
+  border-radius: 4px;
+  padding: 0.2rem;
+  font-size: 0.8rem;
+}
+
+.preview-fps-label .fps-text {
+  color: #7878a0;
+  font-size: 0.75rem;
+}
+
+.devtools-btn.playing {
+  background: #214080;
+  border-color: #3b60b5;
+}
+
+.sprite-chip.marked-delete {
+  border-color: #e06989;
+  color: #ffa8bf;
+  position: relative;
+  padding-left: 1.6rem;
+}
+
+.sprite-chip.marked-delete::before {
+  content: "×";
+  position: absolute;
+  left: 0.4rem;
+  top: 48%;
+  transform: translateY(-50%);
+  color: #ff3b68;
+  font-weight: bold;
 }
 
 .sprite-preview-image {
@@ -174,11 +237,29 @@
   transform-origin: center;
 }
 
+.delete-badge {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  background: #ff3b68;
+  color: #fff;
+  border-radius: 10px;
+  font-size: 0.65rem;
+  padding: 0.1rem 0.35rem;
+  font-weight: bold;
+  border: 2px solid #1a1a35;
+}
+
 .delete-slot {
   margin-left: auto;
   display: flex;
   align-items: center;
   gap: 0.35rem;
+}
+
+.icon-btn.delete-confirm-btn {
+  position: relative;
+  overflow: visible;
 }
 
 .icon-btn {
@@ -275,7 +356,6 @@
 
 .viewer-toolbar.under-atlas {
   padding: 0.35rem 0.75rem 0.5rem;
-  border-top: 1px solid #252540;
   background: #12122a;
 }
 
@@ -288,7 +368,7 @@
 
 /* atlas canvas area */
 .atlas-viewport {
-  flex: 1;
+  flex: 0 0 50vh;
   min-height: 0;
   position: relative;
   background:

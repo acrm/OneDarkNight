@@ -31,7 +31,7 @@ interface NumberStepperFieldProps {
   step?: number;
 }
 
-const MARKER_VISUAL_RADIUS_UI = 16;
+const MARKER_VISUAL_RADIUS_UI = 20;
 const MARKER_HIT_RADIUS_UI = 30;
 const VIEW_MIN_SCALE = 0.25;
 const VIEW_MAX_SCALE = 12;
@@ -363,9 +363,9 @@ export function DevtoolsPage() {
         const right = left + sprite.frameWidth;
         const bottom = top + sprite.frameHeight;
         const isActiveFrame = markerModel.activeFrameIndex === idx;
-        const frameStroke = isActiveFrame ? '#f97316' : '#4f7ca8cc';
-        const anchorFill = isActiveFrame ? '#f97316' : '#23b5d8';
-        const anchorDrawRadius = isActiveFrame ? markerRadius : markerRadius * 0.86;
+        const frameStroke = isActiveFrame ? '#ff7b1f' : '#3f6f93aa';
+        const anchorFill = isActiveFrame ? '#ff7b1f' : '#1ea7c8cc';
+        const anchorDrawRadius = isActiveFrame ? markerRadius * 1.08 : markerRadius * 0.72;
 
         ctx.strokeStyle = isActiveFrame ? '#000000dd' : '#00000099';
         ctx.lineWidth = isActiveFrame ? baseLineWidth + 2 / viewScale : baseLineWidth + 1.2 / viewScale;
@@ -374,6 +374,13 @@ export function DevtoolsPage() {
         ctx.strokeStyle = frameStroke;
         ctx.lineWidth = isActiveFrame ? baseLineWidth * 1.55 : baseLineWidth * 0.92;
         ctx.strokeRect(left, top, sprite.frameWidth, sprite.frameHeight);
+
+        if (isActiveFrame) {
+          ctx.fillStyle = '#ff7b1f22';
+        } else {
+          ctx.fillStyle = '#2f6ea014';
+        }
+        ctx.fillRect(left, top, sprite.frameWidth, sprite.frameHeight);
 
         if (isActiveFrame) {
           ctx.strokeStyle = '#facc1599';
@@ -885,14 +892,10 @@ export function DevtoolsPage() {
                   {deleteConfirmSpriteId === selectedSprite.id ? (
                     <>
                       <button className="devtools-btn tiny danger icon-btn delete-confirm-btn" type="button" title="Подтвердить удаление" onClick={handleConfirmDelete}>
-                        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                          <path d="M9.2 16.4 5.6 12.8l1.8-1.8 1.8 1.8 7.2-7.2 1.8 1.8z" />
-                        </svg>
+                        <i className="fa-solid fa-check" aria-hidden="true" />
                       </button>
                       <button className="devtools-btn tiny icon-btn delete-cancel-btn" type="button" title="Отмена удаления" onClick={() => setDeleteConfirmSpriteId(null)}>
-                        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                          <path d="M18.3 7.1 16.9 5.7 12 10.6 7.1 5.7 5.7 7.1 10.6 12l-4.9 4.9 1.4 1.4 4.9-4.9 4.9 4.9 1.4-1.4-4.9-4.9z" />
-                        </svg>
+                        <i className="fa-solid fa-xmark" aria-hidden="true" />
                       </button>
                     </>
                   ) : (
@@ -902,9 +905,7 @@ export function DevtoolsPage() {
                       title="Удалить спрайт"
                       onClick={() => setDeleteConfirmSpriteId(selectedSprite.id)}
                     >
-                      <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                        <path d="M9 3h6l1 2h4v2H4V5h4zm1 6h2v8h-2zm4 0h2v8h-2zM7 9h2v8H7z" />
-                      </svg>
+                      <i className="fa-solid fa-trash-can" aria-hidden="true" />
                     </button>
                   )}
                 </div>

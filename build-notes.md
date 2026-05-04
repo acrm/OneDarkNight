@@ -17,3 +17,4 @@
 - 2026w15-0.15 — fix undefined anchors crash and tighten delete confirmation UX
 - 2026w15-0.16 — refine delete icon flow and fix passive wheel warning in atlas viewer
 - 2026w15-0.17 — improve devtools visual hierarchy and delete button usability
+- 2026w15-0.18 — make devtools visuals clearly stronger

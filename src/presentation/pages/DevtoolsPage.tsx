@@ -1,4 +1,4 @@
-import { ChangeEvent, PointerEvent, WheelEvent, useEffect, useMemo, useRef, useState } from 'react';
+import { ChangeEvent, PointerEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useDevtoolsStore } from '../../application/devtoolsStore';
 import { clampPositiveInt, toAtlasDocument } from '../../application/spriteAtlasUtils';
 import type { AtlasDocument, SpriteDefinition } from '../../application/devtoolsTypes';
@@ -37,6 +37,51 @@ const VIEW_MIN_SCALE = 0.25;
 const VIEW_MAX_SCALE = 12;
 
 const clamp = (value: number, min: number, max: number): number => Math.min(max, Math.max(min, value));
+
+const drawAnchorIcon = (ctx: CanvasRenderingContext2D, x: number, y: number, size: number, color: string, lineWidth: number) => {
+  const r = size * 0.45;
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = lineWidth;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+
+  ctx.beginPath();
+  ctx.arc(x, y - r * 0.65, r * 0.35, 0, Math.PI * 2);
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.moveTo(x, y - r * 0.25);
+  ctx.lineTo(x, y + r * 0.72);
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.arc(x, y + r * 0.72, r * 0.85, Math.PI * 0.1, Math.PI * 0.9);
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.moveTo(x - r * 0.72, y + r * 0.92);
+  ctx.lineTo(x - r * 0.98, y + r * 0.58);
+  ctx.moveTo(x + r * 0.72, y + r * 0.92);
+  ctx.lineTo(x + r * 0.98, y + r * 0.58);
+  ctx.stroke();
+  ctx.restore();
+};
+
+const drawCornerIcon = (ctx: CanvasRenderingContext2D, x: number, y: number, size: number, color: string, lineWidth: number) => {
+  const arm = size * 0.42;
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = lineWidth;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.beginPath();
+  ctx.moveTo(x - arm, y);
+  ctx.lineTo(x + arm * 0.95, y);
+  ctx.lineTo(x + arm * 0.95, y - arm * 0.95);
+  ctx.stroke();
+  ctx.restore();
+};
 
 const loadImageFromDataUrl = (dataUrl: string): Promise<HTMLImageElement> => {
   return new Promise((resolve, reject) => {
@@ -334,6 +379,7 @@ export function DevtoolsPage() {
         ctx.lineWidth = baseLineWidth;
         ctx.strokeStyle = '#020617';
         ctx.stroke();
+        drawAnchorIcon(ctx, anchor.x, anchor.y, markerRadius * 1.45, '#0b1022', Math.max(1.6, 2 / viewScale));
 
         if (isActiveFrame) {
           const crossX = right;
@@ -348,15 +394,7 @@ export function DevtoolsPage() {
           ctx.lineWidth = baseLineWidth;
           ctx.strokeStyle = '#111827';
           ctx.stroke();
-
-          ctx.strokeStyle = '#111827';
-          ctx.lineWidth = Math.max(2.6, 3 / viewScale);
-          ctx.beginPath();
-          ctx.moveTo(crossX - crossLine, crossY);
-          ctx.lineTo(crossX + crossLine, crossY);
-          ctx.moveTo(crossX, crossY - crossLine);
-          ctx.lineTo(crossX, crossY + crossLine);
-          ctx.stroke();
+          drawCornerIcon(ctx, crossX, crossY, crossLine * 1.5, '#111827', Math.max(2.4, 2.8 / viewScale));
         }
       }
     }
@@ -524,7 +562,7 @@ export function DevtoolsPage() {
     setDragState(null);
   };
 
-  const zoomBy = (factor: number, centerUiX?: number, centerUiY?: number) => {
+  const zoomBy = useCallback((factor: number, centerUiX?: number, centerUiY?: number) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
@@ -544,16 +582,26 @@ export function DevtoolsPage() {
       x: cx - worldX * nextScale,
       y: cy - worldY * nextScale,
     });
-  };
+  }, [viewOffset.x, viewOffset.y, viewScale]);
 
-  const onCanvasWheel = (event: WheelEvent<HTMLCanvasElement>) => {
-    event.preventDefault();
-    const rect = event.currentTarget.getBoundingClientRect();
-    const centerX = event.clientX - rect.left;
-    const centerY = event.clientY - rect.top;
-    const factor = event.deltaY < 0 ? 1.12 : 1 / 1.12;
-    zoomBy(factor, centerX, centerY);
-  };
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const handleWheel = (event: globalThis.WheelEvent) => {
+      event.preventDefault();
+      const rect = canvas.getBoundingClientRect();
+      const centerX = event.clientX - rect.left;
+      const centerY = event.clientY - rect.top;
+      const factor = event.deltaY < 0 ? 1.12 : 1 / 1.12;
+      zoomBy(factor, centerX, centerY);
+    };
+
+    canvas.addEventListener('wheel', handleWheel, { passive: false });
+    return () => {
+      canvas.removeEventListener('wheel', handleWheel);
+    };
+  }, [zoomBy]);
 
   const onAtlasFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -818,18 +866,19 @@ export function DevtoolsPage() {
                   }}
                 />
                 <div className="delete-slot">
-                  <button
-                    className={`devtools-btn tiny icon-btn ${deleteConfirmSpriteId === selectedSprite.id ? '' : 'ghost-btn'}`}
-                    type="button"
-                    title="Отмена удаления"
-                    onClick={() => setDeleteConfirmSpriteId(null)}
-                    disabled={deleteConfirmSpriteId !== selectedSprite.id}
-                    aria-hidden={deleteConfirmSpriteId !== selectedSprite.id}
-                  >
-                    x
-                  </button>
                   {deleteConfirmSpriteId === selectedSprite.id ? (
-                    <button className="devtools-btn tiny danger icon-btn" type="button" title="Подтвердить удаление" onClick={handleConfirmDelete}>v</button>
+                    <>
+                      <button className="devtools-btn tiny danger icon-btn" type="button" title="Подтвердить удаление" onClick={handleConfirmDelete}>
+                        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                          <path d="M9.2 16.4 5.6 12.8l1.8-1.8 1.8 1.8 7.2-7.2 1.8 1.8z" />
+                        </svg>
+                      </button>
+                      <button className="devtools-btn tiny icon-btn" type="button" title="Отмена удаления" onClick={() => setDeleteConfirmSpriteId(null)}>
+                        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                          <path d="M18.3 7.1 16.9 5.7 12 10.6 7.1 5.7 5.7 7.1 10.6 12l-4.9 4.9 1.4 1.4 4.9-4.9 4.9 4.9 1.4-1.4-4.9-4.9z" />
+                        </svg>
+                      </button>
+                    </>
                   ) : (
                     <button
                       className="devtools-btn tiny danger icon-btn"
@@ -837,7 +886,9 @@ export function DevtoolsPage() {
                       title="Удалить спрайт"
                       onClick={() => setDeleteConfirmSpriteId(selectedSprite.id)}
                     >
-                      -
+                      <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                        <path d="M9 3h6l1 2h4v2H4V5h4zm1 6h2v8h-2zm4 0h2v8h-2zM7 9h2v8H7z" />
+                      </svg>
                     </button>
                   )}
                 </div>
@@ -880,7 +931,6 @@ export function DevtoolsPage() {
               onPointerMove={onCanvasPointerMove}
               onPointerUp={onCanvasPointerUp}
               onPointerCancel={onCanvasPointerUp}
-              onWheel={onCanvasWheel}
             />
           ) : (
             <div className="devtools-atlas-placeholder">Загрузите атлас, чтобы включить редактор маркеров.</div>

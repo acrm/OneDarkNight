@@ -15,3 +15,4 @@
 - 2026w15-0.13 — reorder controls above atlas and highlight current frame marker
 - 2026w15-0.14 — fix controlled input warning and update devtools control UX
 - 2026w15-0.15 — fix undefined anchors crash and tighten delete confirmation UX
+- 2026w15-0.16 — refine delete icon flow and fix passive wheel warning in atlas viewer

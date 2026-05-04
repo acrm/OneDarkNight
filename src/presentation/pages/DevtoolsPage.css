@@ -105,6 +105,12 @@
   flex-direction: column;
 }
 
+.devtools-control-zone {
+  flex-shrink: 0;
+  background: #12122a;
+  border-bottom: 1px solid #252540;
+}
+
 /* sprite chips row + zoom toolbar */
 .devtools-top-bar {
   display: flex;
@@ -112,9 +118,18 @@
   gap: 0.5rem;
   flex-shrink: 0;
   padding: 0.35rem 0.75rem;
-  background: #12122a;
+  background: transparent;
   border-bottom: 1px solid #252540;
   overflow: hidden;
+}
+
+.devtools-edit-row {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 0.3rem 0.75rem 0.45rem;
+  border-bottom: 1px solid #252540;
 }
 
 .sprite-selector-bar {
@@ -218,8 +233,7 @@
   gap: 0.35rem;
   flex-shrink: 0;
   padding: 0.35rem 0.75rem;
-  background: #12122a;
-  border-top: 1px solid #252540;
+  background: transparent;
   overflow-x: auto;
   min-height: 40px;
 }
@@ -257,20 +271,8 @@
 }
 
 /* ─── Editor (bottom strip) ───────────────────────────────────── */
-.devtools-editor {
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 0.65rem;
-  padding: 0.65rem 0.9rem;
-  background: #131325;
-  border-top: 1px solid #2a2a40;
-  min-height: 64px;
-}
-
-.editor-name-field {
-  min-width: 140px;
+.compact-name-field {
+  min-width: 180px;
 }
 
 /* ─── Shared field / button / hint styles ─────────────────────── */
@@ -305,6 +307,19 @@
 .devtools-field-stepper .stepper-control input {
   text-align: center;
   width: 52px;
+}
+
+.devtools-edit-row .devtools-field-stepper .stepper-control input {
+  width: 48px;
+}
+
+.devtools-edit-row .devtools-field span {
+  font-size: 0.74rem;
+}
+
+.devtools-edit-row .devtools-field input {
+  padding: 0.3rem 0.45rem;
+  font-size: 0.85rem;
 }
 
 .devtools-btn {

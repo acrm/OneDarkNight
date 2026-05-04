@@ -152,6 +152,7 @@ export function DevtoolsPage() {
 
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const selectedSprite = sprites.find((sprite) => sprite.id === selectedSpriteId) ?? null;
 
   useEffect(() => {
     let cancelled = false;
@@ -201,14 +202,32 @@ export function DevtoolsPage() {
   }, [atlasImage, canvasSize.height, canvasSize.width]);
 
   const markerModel = useMemo(() => {
-    const confirmedSprites = sprites.filter((sprite) => sprite.confirmed && sprite.anchors.length > 0);
-    const crosshair =
-      lastMovedAnchor &&
-      confirmedSprites.some((sprite) => sprite.id === lastMovedAnchor.spriteId)
-        ? lastMovedAnchor
+    const selectedConfirmedSprite =
+      selectedSprite && selectedSprite.confirmed && selectedSprite.anchors.length > 0
+        ? selectedSprite
         : null;
-    return { confirmedSprites, crosshair };
-  }, [lastMovedAnchor, sprites]);
+
+    if (!selectedConfirmedSprite) {
+      return { selectedConfirmedSprite: null, activeFrameIndex: null as number | null };
+    }
+
+    if (selectedConfirmedSprite.anchors[selectedFrameIndex]) {
+      return { selectedConfirmedSprite, activeFrameIndex: selectedFrameIndex };
+    }
+
+    if (
+      lastMovedAnchor &&
+      lastMovedAnchor.spriteId === selectedConfirmedSprite.id &&
+      selectedConfirmedSprite.anchors[lastMovedAnchor.frameIndex]
+    ) {
+      return { selectedConfirmedSprite, activeFrameIndex: lastMovedAnchor.frameIndex };
+    }
+
+    return {
+      selectedConfirmedSprite,
+      activeFrameIndex: selectedConfirmedSprite.anchors.length > 0 ? 0 : null,
+    };
+  }, [lastMovedAnchor, selectedFrameIndex, selectedSprite]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -241,56 +260,38 @@ export function DevtoolsPage() {
     const baseLineWidth = Math.max(2.2, 3.2 / viewScale);
     const markerRadius = Math.max(8, MARKER_VISUAL_RADIUS_UI / viewScale);
 
-    for (const sprite of markerModel.confirmedSprites) {
-      const isSelected = sprite.id === selectedSpriteId;
-      const rectColor = isSelected ? '#f97316' : '#60a5fa';
-
+    const sprite = markerModel.selectedConfirmedSprite;
+    if (sprite) {
       for (let idx = 0; idx < sprite.anchors.length; idx += 1) {
         const anchor = sprite.anchors[idx];
         const left = anchor.x - sprite.frameWidth / 2;
         const top = anchor.y - sprite.frameHeight / 2;
         const right = left + sprite.frameWidth;
         const bottom = top + sprite.frameHeight;
+        const isActiveFrame = markerModel.activeFrameIndex === idx;
 
         ctx.strokeStyle = '#000000cc';
         ctx.lineWidth = baseLineWidth + 2 / viewScale;
         ctx.strokeRect(left, top, sprite.frameWidth, sprite.frameHeight);
 
-        ctx.strokeStyle = rectColor;
-        ctx.lineWidth = baseLineWidth;
+        ctx.strokeStyle = isActiveFrame ? '#f97316' : '#60a5fa';
+        ctx.lineWidth = isActiveFrame ? baseLineWidth * 1.5 : baseLineWidth;
         ctx.strokeRect(left, top, sprite.frameWidth, sprite.frameHeight);
 
         ctx.beginPath();
         ctx.arc(anchor.x, anchor.y, markerRadius, 0, Math.PI * 2);
-        ctx.fillStyle = isSelected ? '#f97316' : '#22d3ee';
+        ctx.fillStyle = isActiveFrame ? '#f97316' : '#22d3ee';
         ctx.fill();
         ctx.lineWidth = baseLineWidth;
         ctx.strokeStyle = '#020617';
         ctx.stroke();
 
-        if (markerModel.crosshair && markerModel.crosshair.spriteId === sprite.id && markerModel.crosshair.frameIndex === idx) {
+        if (isActiveFrame) {
           const crossX = right;
           const crossY = bottom;
-
-          ctx.strokeStyle = '#facc15';
-          ctx.lineWidth = Math.max(3, 3.8 / viewScale);
-          ctx.beginPath();
-          ctx.moveTo(crossX, 0);
-          ctx.lineTo(crossX, atlasImage.height);
-          ctx.moveTo(0, crossY);
-          ctx.lineTo(atlasImage.width, crossY);
-          ctx.stroke();
-
-          ctx.strokeStyle = '#22d3ee';
-          ctx.lineWidth = Math.max(3, 3.8 / viewScale);
-          ctx.beginPath();
-          ctx.moveTo(anchor.x, 0);
-          ctx.lineTo(anchor.x, atlasImage.height);
-          ctx.moveTo(0, anchor.y);
-          ctx.lineTo(atlasImage.width, anchor.y);
-          ctx.stroke();
-
           const crossRadius = markerRadius + 2 / viewScale;
+          const crossLine = markerRadius * 0.7;
+
           ctx.beginPath();
           ctx.arc(crossX, crossY, crossRadius, 0, Math.PI * 2);
           ctx.fillStyle = '#facc15';
@@ -298,12 +299,21 @@ export function DevtoolsPage() {
           ctx.lineWidth = baseLineWidth;
           ctx.strokeStyle = '#111827';
           ctx.stroke();
+
+          ctx.strokeStyle = '#111827';
+          ctx.lineWidth = Math.max(2.6, 3 / viewScale);
+          ctx.beginPath();
+          ctx.moveTo(crossX - crossLine, crossY);
+          ctx.lineTo(crossX + crossLine, crossY);
+          ctx.moveTo(crossX, crossY - crossLine);
+          ctx.lineTo(crossX, crossY + crossLine);
+          ctx.stroke();
         }
       }
     }
 
     ctx.restore();
-  }, [atlasImage, canvasSize.height, canvasSize.width, markerModel.confirmedSprites, markerModel.crosshair, selectedSpriteId, viewOffset.x, viewOffset.y, viewScale]);
+  }, [atlasImage, canvasSize.height, canvasSize.width, markerModel.activeFrameIndex, markerModel.selectedConfirmedSprite, viewOffset.x, viewOffset.y, viewScale]);
 
   const toWorldCoords = (clientX: number, clientY: number): { x: number; y: number } | null => {
     const canvas = canvasRef.current;
@@ -334,20 +344,22 @@ export function DevtoolsPage() {
     const x = clientX - rect.left;
     const y = clientY - rect.top;
 
-    if (markerModel.crosshair) {
-      const sprite = sprites.find((item) => item.id === markerModel.crosshair?.spriteId);
-      if (sprite && sprite.anchors[markerModel.crosshair.frameIndex]) {
-        const anchor = sprite.anchors[markerModel.crosshair.frameIndex];
+    if (markerModel.selectedConfirmedSprite && markerModel.activeFrameIndex !== null) {
+      const sprite = markerModel.selectedConfirmedSprite;
+      const frameIndex = markerModel.activeFrameIndex;
+      if (sprite.anchors[frameIndex]) {
+        const anchor = sprite.anchors[frameIndex];
         const cross = worldToUi(anchor.x + sprite.frameWidth / 2, anchor.y + sprite.frameHeight / 2);
         const dx = x - cross.x;
         const dy = y - cross.y;
         if (dx * dx + dy * dy <= MARKER_HIT_RADIUS_UI * MARKER_HIT_RADIUS_UI) {
-          return { mode: 'crosshair', spriteId: sprite.id, frameIndex: markerModel.crosshair.frameIndex };
+          return { mode: 'crosshair', spriteId: sprite.id, frameIndex };
         }
       }
     }
 
-    for (const sprite of markerModel.confirmedSprites) {
+    const sprite = markerModel.selectedConfirmedSprite;
+    if (sprite) {
       for (let i = 0; i < sprite.anchors.length; i += 1) {
         const anchorUi = worldToUi(sprite.anchors[i].x, sprite.anchors[i].y);
         const dx = x - anchorUi.x;
@@ -406,6 +418,8 @@ export function DevtoolsPage() {
 
     if (hit) {
       selectSprite(hit.spriteId);
+      setSelectedFrameIndex(hit.frameIndex);
+      setLastMovedAnchor({ spriteId: hit.spriteId, frameIndex: hit.frameIndex });
       setDragState({
         mode: hit.mode,
         pointerId: event.pointerId,
@@ -548,6 +562,7 @@ export function DevtoolsPage() {
         sprites: normalizedSprites,
       });
       setLastMovedAnchor(null);
+      setSelectedFrameIndex(0);
     } catch (error: unknown) {
       setErrorText(error instanceof Error ? error.message : 'Не удалось импортировать JSON.');
     }
@@ -577,7 +592,9 @@ export function DevtoolsPage() {
       confirmed: true,
     });
 
-    setLastMovedAnchor({ spriteId: sprite.id, frameIndex: Math.max(0, anchors.length - 1) });
+    const confirmedFrameIndex = Math.max(0, Math.min(selectedFrameIndex, anchors.length - 1));
+    setLastMovedAnchor({ spriteId: sprite.id, frameIndex: confirmedFrameIndex });
+    setSelectedFrameIndex(confirmedFrameIndex);
     selectSprite(sprite.id);
   };
 
@@ -618,8 +635,6 @@ export function DevtoolsPage() {
     });
   };
 
-  const selectedSprite = sprites.find((s) => s.id === selectedSpriteId) ?? null;
-
   const addFrame = () => {
     if (!selectedSprite || !atlasImage) return;
     const frameCount = selectedSprite.frameCount + 1;
@@ -634,6 +649,22 @@ export function DevtoolsPage() {
     const newFrameIndex = frameCount - 1;
     setSelectedFrameIndex(newFrameIndex);
     setLastMovedAnchor({ spriteId: selectedSprite.id, frameIndex: newFrameIndex });
+  };
+
+  const handleSelectSprite = (sprite: SpriteDefinition) => {
+    selectSprite(sprite.id);
+    setSelectedFrameIndex(0);
+    if (sprite.confirmed && sprite.anchors.length > 0) {
+      setLastMovedAnchor({ spriteId: sprite.id, frameIndex: 0 });
+      return;
+    }
+    setLastMovedAnchor(null);
+  };
+
+  const handleAddSprite = () => {
+    addSprite();
+    setSelectedFrameIndex(0);
+    setLastMovedAnchor(null);
   };
 
   return (
@@ -663,31 +694,83 @@ export function DevtoolsPage() {
       {errorText ? <div className="devtools-error">{errorText}</div> : null}
 
       <div className="devtools-viewer">
-        <div className="devtools-top-bar">
-          <div className="sprite-selector-bar">
-            {sprites.map((sprite) => (
-              <button
-                key={sprite.id}
-                type="button"
-                className={`sprite-chip${sprite.id === selectedSpriteId ? ' active' : ''}`}
-                onClick={() => {
-                  selectSprite(sprite.id);
-                  if (sprite.confirmed && sprite.anchors.length > 0) {
-                    setLastMovedAnchor({ spriteId: sprite.id, frameIndex: 0 });
-                    setSelectedFrameIndex(0);
-                  }
-                }}
-              >
-                {sprite.name || 'unnamed'}
-              </button>
-            ))}
-            <button className="devtools-btn tiny" type="button" onClick={() => addSprite()}>+ Спрайт</button>
+        <div className="devtools-control-zone">
+          <div className="devtools-top-bar">
+            <div className="sprite-selector-bar">
+              {sprites.map((sprite) => (
+                <button
+                  key={sprite.id}
+                  type="button"
+                  className={`sprite-chip${sprite.id === selectedSpriteId ? ' active' : ''}`}
+                  onClick={() => handleSelectSprite(sprite)}
+                >
+                  {sprite.name || 'unnamed'}
+                </button>
+              ))}
+              <button className="devtools-btn tiny" type="button" onClick={handleAddSprite}>+ Спрайт</button>
+            </div>
+            <div className="viewer-toolbar">
+              <button className="devtools-btn tiny" type="button" onClick={() => zoomBy(1.15)}>+</button>
+              <button className="devtools-btn tiny" type="button" onClick={() => zoomBy(1 / 1.15)}>−</button>
+              <button className="devtools-btn tiny" type="button" onClick={fitView}>Fit</button>
+              <span className="viewer-scale">{Math.round(viewScale * 100)}%</span>
+            </div>
           </div>
-          <div className="viewer-toolbar">
-            <button className="devtools-btn tiny" type="button" onClick={() => zoomBy(1.15)}>+</button>
-            <button className="devtools-btn tiny" type="button" onClick={() => zoomBy(1 / 1.15)}>−</button>
-            <button className="devtools-btn tiny" type="button" onClick={fitView}>Fit</button>
-            <span className="viewer-scale">{Math.round(viewScale * 100)}%</span>
+
+          <div className="devtools-edit-row">
+            {selectedSprite ? (
+              <>
+                <button className="devtools-btn tiny danger" type="button" onClick={() => deleteSprite(selectedSprite.id)}>Удалить</button>
+                <label className="devtools-field compact-name-field">
+                  <span>Имя</span>
+                  <input
+                    value={selectedSprite.name}
+                    onChange={(e) => updateSprite(selectedSprite.id, { name: e.target.value })}
+                  />
+                </label>
+                <NumberStepperField
+                  label="Ширина"
+                  value={selectedSprite.frameWidth}
+                  min={1}
+                  onChange={(next) => updateSprite(selectedSprite.id, { frameWidth: clampPositiveInt(next, selectedSprite.frameWidth), confirmed: false })}
+                />
+                <NumberStepperField
+                  label="Высота"
+                  value={selectedSprite.frameHeight}
+                  min={1}
+                  onChange={(next) => updateSprite(selectedSprite.id, { frameHeight: clampPositiveInt(next, selectedSprite.frameHeight), confirmed: false })}
+                />
+                <button className="devtools-btn primary tiny" type="button" onClick={() => confirmSprite(selectedSprite)}>Применить</button>
+                <span className="sprite-status">{selectedSprite.confirmed ? `Маркеров: ${selectedSprite.anchors.length}` : 'Не подтвержден'}</span>
+              </>
+            ) : (
+              <span className="devtools-hint">Выберите или добавьте спрайт</span>
+            )}
+          </div>
+
+          <div className="frame-selector-bar">
+            {selectedSprite ? (
+              <>
+                {Array.from({ length: selectedSprite.frameCount }, (_, i) => (
+                  <button
+                    key={i}
+                    type="button"
+                    className={`frame-chip${selectedFrameIndex === i ? ' active' : ''}`}
+                    onClick={() => {
+                      setSelectedFrameIndex(i);
+                      if (selectedSprite.confirmed && selectedSprite.anchors[i]) {
+                        setLastMovedAnchor({ spriteId: selectedSprite.id, frameIndex: i });
+                      }
+                    }}
+                  >
+                    {i + 1}
+                  </button>
+                ))}
+                <button className="devtools-btn tiny" type="button" onClick={addFrame}>+ Кадр</button>
+              </>
+            ) : (
+              <span className="devtools-hint">Выберите спрайт для просмотра кадров</span>
+            )}
           </div>
         </div>
 
@@ -706,62 +789,6 @@ export function DevtoolsPage() {
             <div className="devtools-atlas-placeholder">Загрузите атлас, чтобы включить редактор маркеров.</div>
           )}
         </div>
-
-        <div className="frame-selector-bar">
-          {selectedSprite ? (
-            <>
-              {Array.from({ length: selectedSprite.frameCount }, (_, i) => (
-                <button
-                  key={i}
-                  type="button"
-                  className={`frame-chip${selectedFrameIndex === i ? ' active' : ''}`}
-                  onClick={() => {
-                    setSelectedFrameIndex(i);
-                    if (selectedSprite.confirmed && selectedSprite.anchors[i]) {
-                      setLastMovedAnchor({ spriteId: selectedSprite.id, frameIndex: i });
-                    }
-                  }}
-                >
-                  {i + 1}
-                </button>
-              ))}
-              <button className="devtools-btn tiny" type="button" onClick={addFrame}>+ Кадр</button>
-            </>
-          ) : (
-            <span className="devtools-hint">Выберите спрайт для просмотра кадров</span>
-          )}
-        </div>
-      </div>
-
-      <div className="devtools-editor">
-        {selectedSprite ? (
-          <>
-            <label className="devtools-field editor-name-field">
-              <span>Имя</span>
-              <input
-                value={selectedSprite.name}
-                onChange={(e) => updateSprite(selectedSprite.id, { name: e.target.value })}
-              />
-            </label>
-            <NumberStepperField
-              label="Ширина кадра"
-              value={selectedSprite.frameWidth}
-              min={1}
-              onChange={(next) => updateSprite(selectedSprite.id, { frameWidth: clampPositiveInt(next, selectedSprite.frameWidth), confirmed: false })}
-            />
-            <NumberStepperField
-              label="Высота кадра"
-              value={selectedSprite.frameHeight}
-              min={1}
-              onChange={(next) => updateSprite(selectedSprite.id, { frameHeight: clampPositiveInt(next, selectedSprite.frameHeight), confirmed: false })}
-            />
-            <button className="devtools-btn primary" type="button" onClick={() => confirmSprite(selectedSprite)}>Подтвердить</button>
-            <button className="devtools-btn tiny danger" type="button" onClick={() => deleteSprite(selectedSprite.id)}>Удалить</button>
-            <span className="sprite-status">{selectedSprite.confirmed ? `Маркеров: ${selectedSprite.anchors.length}` : 'Не подтвержден'}</span>
-          </>
-        ) : (
-          <span className="devtools-hint">Выберите или добавьте спрайт</span>
-        )}
       </div>
     </div>
   );

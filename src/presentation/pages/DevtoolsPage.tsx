@@ -22,8 +22,10 @@ interface LastMovedAnchor {
 
 interface NumberStepperFieldProps {
   label: string;
-  value: number;
+  value: number | undefined;
   onChange: (next: number) => void;
+  onBlurCommit?: (next: number) => void;
+  fallbackValue: number;
   min?: number;
   max?: number;
   step?: number;
@@ -66,7 +68,18 @@ const isAtlasDocument = (value: unknown): value is AtlasDocument => {
   return candidate.schemaVersion === 1 && typeof candidate.atlasFileName === 'string' && Array.isArray(candidate.sprites);
 };
 
-const NumberStepperField = ({ label, value, onChange, min, max, step = 1 }: NumberStepperFieldProps) => {
+const NumberStepperField = ({
+  label,
+  value,
+  onChange,
+  onBlurCommit,
+  fallbackValue,
+  min,
+  max,
+  step = 1,
+}: NumberStepperFieldProps) => {
+  const [draft, setDraft] = useState('');
+
   const clampNumber = (raw: number): number => {
     let next = raw;
     if (typeof min === 'number') next = Math.max(min, next);
@@ -74,23 +87,50 @@ const NumberStepperField = ({ label, value, onChange, min, max, step = 1 }: Numb
     return next;
   };
 
+  const normalizedValue = Number.isFinite(value) ? Number(value) : fallbackValue;
+
+  useEffect(() => {
+    setDraft(String(normalizedValue));
+  }, [normalizedValue]);
+
+  const commitNumber = (raw: number) => {
+    const next = clampNumber(Math.round(raw));
+    onChange(next);
+    onBlurCommit?.(next);
+    setDraft(String(next));
+  };
+
   return (
     <label className="devtools-field devtools-field-stepper">
       <span>{label}</span>
       <div className="stepper-control">
-        <button className="devtools-btn tiny" type="button" onClick={() => onChange(clampNumber(value - step))}>
+        <button className="devtools-btn tiny" type="button" onClick={() => commitNumber((Number(draft) || normalizedValue) - step)}>
           -
         </button>
         <input
           type="number"
-          value={value}
+          value={draft}
           onChange={(e) => {
+            setDraft(e.target.value);
+            if (e.target.value.trim() === '') return;
             const numeric = Number(e.target.value);
             if (!Number.isFinite(numeric)) return;
             onChange(clampNumber(Math.round(numeric)));
           }}
+          onBlur={() => {
+            if (draft.trim() === '') {
+              commitNumber(fallbackValue);
+              return;
+            }
+            const numeric = Number(draft);
+            if (!Number.isFinite(numeric)) {
+              commitNumber(fallbackValue);
+              return;
+            }
+            commitNumber(numeric);
+          }}
         />
-        <button className="devtools-btn tiny" type="button" onClick={() => onChange(clampNumber(value + step))}>
+        <button className="devtools-btn tiny" type="button" onClick={() => commitNumber((Number(draft) || normalizedValue) + step)}>
           +
         </button>
       </div>
@@ -145,6 +185,7 @@ export function DevtoolsPage() {
   const [errorText, setErrorText] = useState('');
   const [lastMovedAnchor, setLastMovedAnchor] = useState<LastMovedAnchor | null>(null);
   const [dragState, setDragState] = useState<DragState | null>(null);
+  const [deleteConfirmSpriteId, setDeleteConfirmSpriteId] = useState<string | null>(null);
   const [viewScale, setViewScale] = useState(1);
   const [viewOffset, setViewOffset] = useState({ x: 0, y: 0 });
   const [canvasSize, setCanvasSize] = useState({ width: 600, height: 420 });
@@ -563,39 +604,10 @@ export function DevtoolsPage() {
       });
       setLastMovedAnchor(null);
       setSelectedFrameIndex(0);
+      setDeleteConfirmSpriteId(null);
     } catch (error: unknown) {
       setErrorText(error instanceof Error ? error.message : 'Не удалось импортировать JSON.');
     }
-  };
-
-  const confirmSprite = (sprite: SpriteDefinition) => {
-    if (!atlasImage) {
-      setErrorText('Сначала загрузите атлас.');
-      return;
-    }
-
-    const frameCount = clampPositiveInt(sprite.frameCount, 1);
-    const frameWidth = clampPositiveInt(sprite.frameWidth, 1);
-    const frameHeight = clampPositiveInt(sprite.frameHeight, 1);
-
-    let anchors = sprite.anchors.slice(0, frameCount);
-    if (anchors.length < frameCount) {
-      const initial = createInitialAnchors(frameCount, frameWidth, frameHeight, atlasImage.width, atlasImage.height);
-      anchors = anchors.concat(initial.slice(anchors.length));
-    }
-
-    updateSprite(sprite.id, {
-      frameCount,
-      frameWidth,
-      frameHeight,
-      anchors,
-      confirmed: true,
-    });
-
-    const confirmedFrameIndex = Math.max(0, Math.min(selectedFrameIndex, anchors.length - 1));
-    setLastMovedAnchor({ spriteId: sprite.id, frameIndex: confirmedFrameIndex });
-    setSelectedFrameIndex(confirmedFrameIndex);
-    selectSprite(sprite.id);
   };
 
   const exportJson = () => {
@@ -619,6 +631,7 @@ export function DevtoolsPage() {
     setLastMovedAnchor(null);
     setErrorText('');
     setSelectedFrameIndex(0);
+    setDeleteConfirmSpriteId(null);
   };
 
   const fitView = () => {
@@ -651,11 +664,41 @@ export function DevtoolsPage() {
     setLastMovedAnchor({ spriteId: selectedSprite.id, frameIndex: newFrameIndex });
   };
 
+  const defaultSpriteName = (sprite: SpriteDefinition): string => {
+    const index = sprites.findIndex((item) => item.id === sprite.id);
+    return `sprite_${Math.max(1, index + 1)}`;
+  };
+
+  const ensureSpriteDefaults = (sprite: SpriteDefinition, preferredFrameIndex = 0) => {
+    if (!atlasImage) return;
+    const frameCount = clampPositiveInt(sprite.frameCount, 1);
+    const frameWidth = clampPositiveInt(sprite.frameWidth, grid.cellWidth);
+    const frameHeight = clampPositiveInt(sprite.frameHeight, grid.cellHeight);
+    let anchors = sprite.anchors.slice(0, frameCount);
+    if (anchors.length < frameCount) {
+      const initial = createInitialAnchors(frameCount, frameWidth, frameHeight, atlasImage.width, atlasImage.height);
+      anchors = anchors.concat(initial.slice(anchors.length));
+    }
+    const safeName = sprite.name?.trim() ? sprite.name : defaultSpriteName(sprite);
+    updateSprite(sprite.id, {
+      name: safeName,
+      frameCount,
+      frameWidth,
+      frameHeight,
+      anchors,
+      confirmed: true,
+    });
+    const frameIndex = Math.max(0, Math.min(preferredFrameIndex, anchors.length - 1));
+    setSelectedFrameIndex(frameIndex);
+    setLastMovedAnchor({ spriteId: sprite.id, frameIndex });
+  };
+
   const handleSelectSprite = (sprite: SpriteDefinition) => {
     selectSprite(sprite.id);
     setSelectedFrameIndex(0);
-    if (sprite.confirmed && sprite.anchors.length > 0) {
-      setLastMovedAnchor({ spriteId: sprite.id, frameIndex: 0 });
+    setDeleteConfirmSpriteId(null);
+    if (atlasImage) {
+      ensureSpriteDefaults(sprite, 0);
       return;
     }
     setLastMovedAnchor(null);
@@ -664,7 +707,14 @@ export function DevtoolsPage() {
   const handleAddSprite = () => {
     addSprite();
     setSelectedFrameIndex(0);
+    setDeleteConfirmSpriteId(null);
     setLastMovedAnchor(null);
+  };
+
+  const handleConfirmDelete = () => {
+    if (!selectedSprite) return;
+    deleteSprite(selectedSprite.id);
+    setDeleteConfirmSpriteId(null);
   };
 
   return (
@@ -709,39 +759,62 @@ export function DevtoolsPage() {
               ))}
               <button className="devtools-btn tiny" type="button" onClick={handleAddSprite}>+ Спрайт</button>
             </div>
-            <div className="viewer-toolbar">
-              <button className="devtools-btn tiny" type="button" onClick={() => zoomBy(1.15)}>+</button>
-              <button className="devtools-btn tiny" type="button" onClick={() => zoomBy(1 / 1.15)}>−</button>
-              <button className="devtools-btn tiny" type="button" onClick={fitView}>Fit</button>
-              <span className="viewer-scale">{Math.round(viewScale * 100)}%</span>
-            </div>
           </div>
 
           <div className="devtools-edit-row">
             {selectedSprite ? (
               <>
-                <button className="devtools-btn tiny danger" type="button" onClick={() => deleteSprite(selectedSprite.id)}>Удалить</button>
                 <label className="devtools-field compact-name-field">
                   <span>Имя</span>
                   <input
-                    value={selectedSprite.name}
+                    value={selectedSprite.name ?? ''}
                     onChange={(e) => updateSprite(selectedSprite.id, { name: e.target.value })}
+                    onBlur={() => {
+                      const safeName = selectedSprite.name?.trim() ? selectedSprite.name : defaultSpriteName(selectedSprite);
+                      updateSprite(selectedSprite.id, { name: safeName });
+                      if (atlasImage) ensureSpriteDefaults({ ...selectedSprite, name: safeName }, selectedFrameIndex);
+                    }}
                   />
                 </label>
                 <NumberStepperField
                   label="Ширина"
                   value={selectedSprite.frameWidth}
+                  fallbackValue={grid.cellWidth}
                   min={1}
                   onChange={(next) => updateSprite(selectedSprite.id, { frameWidth: clampPositiveInt(next, selectedSprite.frameWidth), confirmed: false })}
+                  onBlurCommit={(next) => {
+                    if (atlasImage) ensureSpriteDefaults({ ...selectedSprite, frameWidth: next }, selectedFrameIndex);
+                  }}
                 />
                 <NumberStepperField
                   label="Высота"
                   value={selectedSprite.frameHeight}
+                  fallbackValue={grid.cellHeight}
                   min={1}
                   onChange={(next) => updateSprite(selectedSprite.id, { frameHeight: clampPositiveInt(next, selectedSprite.frameHeight), confirmed: false })}
+                  onBlurCommit={(next) => {
+                    if (atlasImage) ensureSpriteDefaults({ ...selectedSprite, frameHeight: next }, selectedFrameIndex);
+                  }}
                 />
-                <button className="devtools-btn primary tiny" type="button" onClick={() => confirmSprite(selectedSprite)}>Применить</button>
                 <span className="sprite-status">{selectedSprite.confirmed ? `Маркеров: ${selectedSprite.anchors.length}` : 'Не подтвержден'}</span>
+
+                <div className="delete-slot">
+                  {deleteConfirmSpriteId === selectedSprite.id ? (
+                    <>
+                      <button className="devtools-btn tiny" type="button" onClick={() => setDeleteConfirmSpriteId(null)}>Отмена</button>
+                      <button className="devtools-btn tiny danger" type="button" onClick={handleConfirmDelete}>Удалить</button>
+                    </>
+                  ) : (
+                    <button
+                      className="devtools-btn tiny danger icon-btn"
+                      type="button"
+                      title="Удалить спрайт"
+                      onClick={() => setDeleteConfirmSpriteId(selectedSprite.id)}
+                    >
+                      x
+                    </button>
+                  )}
+                </div>
               </>
             ) : (
               <span className="devtools-hint">Выберите или добавьте спрайт</span>
@@ -758,9 +831,7 @@ export function DevtoolsPage() {
                     className={`frame-chip${selectedFrameIndex === i ? ' active' : ''}`}
                     onClick={() => {
                       setSelectedFrameIndex(i);
-                      if (selectedSprite.confirmed && selectedSprite.anchors[i]) {
-                        setLastMovedAnchor({ spriteId: selectedSprite.id, frameIndex: i });
-                      }
+                      if (atlasImage) ensureSpriteDefaults(selectedSprite, i);
                     }}
                   >
                     {i + 1}
@@ -788,6 +859,13 @@ export function DevtoolsPage() {
           ) : (
             <div className="devtools-atlas-placeholder">Загрузите атлас, чтобы включить редактор маркеров.</div>
           )}
+        </div>
+
+        <div className="viewer-toolbar under-atlas">
+          <button className="devtools-btn tiny" type="button" onClick={() => zoomBy(1.15)}>+</button>
+          <button className="devtools-btn tiny" type="button" onClick={() => zoomBy(1 / 1.15)}>−</button>
+          <button className="devtools-btn tiny" type="button" onClick={fitView}>Fit</button>
+          <span className="viewer-scale">{Math.round(viewScale * 100)}%</span>
         </div>
       </div>
     </div>

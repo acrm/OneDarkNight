@@ -363,23 +363,39 @@ export function DevtoolsPage() {
         const right = left + sprite.frameWidth;
         const bottom = top + sprite.frameHeight;
         const isActiveFrame = markerModel.activeFrameIndex === idx;
+        const frameStroke = isActiveFrame ? '#f97316' : '#4f7ca8cc';
+        const anchorFill = isActiveFrame ? '#f97316' : '#23b5d8';
+        const anchorDrawRadius = isActiveFrame ? markerRadius : markerRadius * 0.86;
 
-        ctx.strokeStyle = '#000000cc';
-        ctx.lineWidth = baseLineWidth + 2 / viewScale;
+        ctx.strokeStyle = isActiveFrame ? '#000000dd' : '#00000099';
+        ctx.lineWidth = isActiveFrame ? baseLineWidth + 2 / viewScale : baseLineWidth + 1.2 / viewScale;
         ctx.strokeRect(left, top, sprite.frameWidth, sprite.frameHeight);
 
-        ctx.strokeStyle = isActiveFrame ? '#f97316' : '#60a5fa';
-        ctx.lineWidth = isActiveFrame ? baseLineWidth * 1.5 : baseLineWidth;
+        ctx.strokeStyle = frameStroke;
+        ctx.lineWidth = isActiveFrame ? baseLineWidth * 1.55 : baseLineWidth * 0.92;
         ctx.strokeRect(left, top, sprite.frameWidth, sprite.frameHeight);
+
+        if (isActiveFrame) {
+          ctx.strokeStyle = '#facc1599';
+          ctx.lineWidth = Math.max(1.6, 2 / viewScale);
+          ctx.strokeRect(left - 1 / viewScale, top - 1 / viewScale, sprite.frameWidth + 2 / viewScale, sprite.frameHeight + 2 / viewScale);
+        }
 
         ctx.beginPath();
-        ctx.arc(anchor.x, anchor.y, markerRadius, 0, Math.PI * 2);
-        ctx.fillStyle = isActiveFrame ? '#f97316' : '#22d3ee';
+        ctx.arc(anchor.x, anchor.y, anchorDrawRadius, 0, Math.PI * 2);
+        ctx.fillStyle = anchorFill;
         ctx.fill();
         ctx.lineWidth = baseLineWidth;
         ctx.strokeStyle = '#020617';
         ctx.stroke();
-        drawAnchorIcon(ctx, anchor.x, anchor.y, markerRadius * 1.45, '#0b1022', Math.max(1.6, 2 / viewScale));
+        drawAnchorIcon(
+          ctx,
+          anchor.x,
+          anchor.y,
+          anchorDrawRadius * 1.45,
+          isActiveFrame ? '#0b1022' : '#10253a',
+          Math.max(1.4, 1.8 / viewScale)
+        );
 
         if (isActiveFrame) {
           const crossX = right;
@@ -868,12 +884,12 @@ export function DevtoolsPage() {
                 <div className="delete-slot">
                   {deleteConfirmSpriteId === selectedSprite.id ? (
                     <>
-                      <button className="devtools-btn tiny danger icon-btn" type="button" title="Подтвердить удаление" onClick={handleConfirmDelete}>
+                      <button className="devtools-btn tiny danger icon-btn delete-confirm-btn" type="button" title="Подтвердить удаление" onClick={handleConfirmDelete}>
                         <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
                           <path d="M9.2 16.4 5.6 12.8l1.8-1.8 1.8 1.8 7.2-7.2 1.8 1.8z" />
                         </svg>
                       </button>
-                      <button className="devtools-btn tiny icon-btn" type="button" title="Отмена удаления" onClick={() => setDeleteConfirmSpriteId(null)}>
+                      <button className="devtools-btn tiny icon-btn delete-cancel-btn" type="button" title="Отмена удаления" onClick={() => setDeleteConfirmSpriteId(null)}>
                         <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
                           <path d="M18.3 7.1 16.9 5.7 12 10.6 7.1 5.7 5.7 7.1 10.6 12l-4.9 4.9 1.4 1.4 4.9-4.9 4.9 4.9 1.4-1.4-4.9-4.9z" />
                         </svg>
@@ -881,7 +897,7 @@ export function DevtoolsPage() {
                     </>
                   ) : (
                     <button
-                      className="devtools-btn tiny danger icon-btn"
+                      className="devtools-btn tiny danger icon-btn delete-trash-btn"
                       type="button"
                       title="Удалить спрайт"
                       onClick={() => setDeleteConfirmSpriteId(selectedSprite.id)}

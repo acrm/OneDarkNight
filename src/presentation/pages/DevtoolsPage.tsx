@@ -148,6 +148,7 @@ export function DevtoolsPage() {
   const [viewScale, setViewScale] = useState(1);
   const [viewOffset, setViewOffset] = useState({ x: 0, y: 0 });
   const [canvasSize, setCanvasSize] = useState({ width: 600, height: 420 });
+  const [selectedFrameIndex, setSelectedFrameIndex] = useState(0);
 
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -371,6 +372,7 @@ export function DevtoolsPage() {
     const anchors = sprite.anchors.map((point, idx) => (idx === frameIndex ? { x: clampedX, y: clampedY } : point));
     updateSprite(spriteId, { anchors, confirmed: true });
     setLastMovedAnchor({ spriteId, frameIndex });
+    setSelectedFrameIndex(frameIndex);
   };
 
   const updateSpriteSizeFromCrosshair = (spriteId: string, frameIndex: number, worldX: number, worldY: number) => {
@@ -391,6 +393,7 @@ export function DevtoolsPage() {
       confirmed: true,
     });
     setLastMovedAnchor({ spriteId, frameIndex });
+    setSelectedFrameIndex(frameIndex);
   };
 
   const onCanvasPointerDown = (event: PointerEvent<HTMLCanvasElement>) => {
@@ -598,147 +601,168 @@ export function DevtoolsPage() {
     reset();
     setLastMovedAnchor(null);
     setErrorText('');
+    setSelectedFrameIndex(0);
+  };
+
+  const fitView = () => {
+    if (!atlasImage) return;
+    const fitScale = clamp(
+      Math.min(canvasSize.width / atlasImage.width, canvasSize.height / atlasImage.height),
+      VIEW_MIN_SCALE,
+      VIEW_MAX_SCALE
+    );
+    setViewScale(fitScale);
+    setViewOffset({
+      x: (canvasSize.width - atlasImage.width * fitScale) / 2,
+      y: (canvasSize.height - atlasImage.height * fitScale) / 2,
+    });
+  };
+
+  const selectedSprite = sprites.find((s) => s.id === selectedSpriteId) ?? null;
+
+  const addFrame = () => {
+    if (!selectedSprite || !atlasImage) return;
+    const frameCount = selectedSprite.frameCount + 1;
+    const frameWidth = clampPositiveInt(selectedSprite.frameWidth, 1);
+    const frameHeight = clampPositiveInt(selectedSprite.frameHeight, 1);
+    let anchors = selectedSprite.anchors.slice(0, frameCount);
+    if (anchors.length < frameCount) {
+      const initial = createInitialAnchors(frameCount, frameWidth, frameHeight, atlasImage.width, atlasImage.height);
+      anchors = anchors.concat(initial.slice(anchors.length));
+    }
+    updateSprite(selectedSprite.id, { frameCount, frameWidth, frameHeight, anchors, confirmed: true });
+    const newFrameIndex = frameCount - 1;
+    setSelectedFrameIndex(newFrameIndex);
+    setLastMovedAnchor({ spriteId: selectedSprite.id, frameIndex: newFrameIndex });
   };
 
   return (
     <div className="devtools-page">
       <header className="devtools-header">
-        <div>
-          <h1>Sprite Atlas Devtool</h1>
-          <p>Зум/панорама атласа и настройка маркеров спрайтов через якорь и перекрестие.</p>
+        <h1 className="devtools-title">Atlas Devtool</h1>
+        <div className="devtools-header-controls">
+          <label className="devtools-file-btn">
+            PNG
+            <input type="file" accept="image/png,image/webp,image/jpeg" onChange={onAtlasFileChange} />
+          </label>
+          <label className="devtools-file-btn">
+            JSON
+            <input type="file" accept="application/json,.json" onChange={onImportDocumentChange} />
+          </label>
+          <button className="devtools-btn tiny" type="button" onClick={exportJson}>Экспорт</button>
+          {atlasFileName ? (
+            <span className="atlas-meta-text">{atlasFileName}{imageWidth ? ` · ${imageWidth}×${imageHeight}` : ''}</span>
+          ) : null}
         </div>
         <div className="devtools-header-actions">
-          <a className="devtools-link" href="#/">Вернуться к игре</a>
-          <button className="devtools-btn danger" onClick={resetTool} type="button">Сбросить</button>
+          <a className="devtools-link" href="#/">← Игра</a>
+          <button className="devtools-btn tiny danger" onClick={resetTool} type="button">Сброс</button>
         </div>
       </header>
 
       {errorText ? <div className="devtools-error">{errorText}</div> : null}
 
-      <section className="devtools-panel devtools-upload-panel">
-        <h2>1. Источник данных</h2>
-        <div className="devtools-upload-grid">
-          <label className="devtools-field">
-            <span>Atlas PNG</span>
-            <input type="file" accept="image/png,image/webp,image/jpeg" onChange={onAtlasFileChange} />
-          </label>
-          <label className="devtools-field">
-            <span>Импорт JSON</span>
-            <input type="file" accept="application/json,.json" onChange={onImportDocumentChange} />
-          </label>
-          <button className="devtools-btn" type="button" onClick={exportJson}>Экспорт JSON</button>
-        </div>
-        <div className="devtools-atlas-meta">
-          <span>Файл: {atlasFileName || 'не загружен'}</span>
-          <span>Размер: {imageWidth || 0} x {imageHeight || 0}</span>
-          <span>Спрайтов: {sprites.length}</span>
-        </div>
-      </section>
-
-      <section className="devtools-layout">
-        <div className="devtools-panel devtools-canvas-panel">
-          <h2>2. Атлас, маркеры и навигация</h2>
+      <div className="devtools-viewer">
+        <div className="devtools-top-bar">
+          <div className="sprite-selector-bar">
+            {sprites.map((sprite) => (
+              <button
+                key={sprite.id}
+                type="button"
+                className={`sprite-chip${sprite.id === selectedSpriteId ? ' active' : ''}`}
+                onClick={() => {
+                  selectSprite(sprite.id);
+                  if (sprite.confirmed && sprite.anchors.length > 0) {
+                    setLastMovedAnchor({ spriteId: sprite.id, frameIndex: 0 });
+                    setSelectedFrameIndex(0);
+                  }
+                }}
+              >
+                {sprite.name || 'unnamed'}
+              </button>
+            ))}
+            <button className="devtools-btn tiny" type="button" onClick={() => addSprite()}>+ Спрайт</button>
+          </div>
           <div className="viewer-toolbar">
-            <button className="devtools-btn tiny" type="button" onClick={() => zoomBy(1.15)}>Zoom +</button>
-            <button className="devtools-btn tiny" type="button" onClick={() => zoomBy(1 / 1.15)}>Zoom -</button>
-            <button
-              className="devtools-btn tiny"
-              type="button"
-              onClick={() => {
-                if (!atlasImage) return;
-                const fitScale = clamp(Math.min(canvasSize.width / atlasImage.width, canvasSize.height / atlasImage.height), VIEW_MIN_SCALE, VIEW_MAX_SCALE);
-                setViewScale(fitScale);
-                setViewOffset({
-                  x: (canvasSize.width - atlasImage.width * fitScale) / 2,
-                  y: (canvasSize.height - atlasImage.height * fitScale) / 2,
-                });
-              }}
-            >
-              Fit
-            </button>
+            <button className="devtools-btn tiny" type="button" onClick={() => zoomBy(1.15)}>+</button>
+            <button className="devtools-btn tiny" type="button" onClick={() => zoomBy(1 / 1.15)}>−</button>
+            <button className="devtools-btn tiny" type="button" onClick={fitView}>Fit</button>
             <span className="viewer-scale">{Math.round(viewScale * 100)}%</span>
           </div>
+        </div>
 
-          <div className="atlas-viewport" ref={viewportRef}>
-            {atlasImage ? (
-              <canvas
-                ref={canvasRef}
-                className="devtools-atlas-preview"
-                onPointerDown={onCanvasPointerDown}
-                onPointerMove={onCanvasPointerMove}
-                onPointerUp={onCanvasPointerUp}
-                onPointerCancel={onCanvasPointerUp}
-                onWheel={onCanvasWheel}
+        <div className="atlas-viewport" ref={viewportRef}>
+          {atlasImage ? (
+            <canvas
+              ref={canvasRef}
+              className="devtools-atlas-preview"
+              onPointerDown={onCanvasPointerDown}
+              onPointerMove={onCanvasPointerMove}
+              onPointerUp={onCanvasPointerUp}
+              onPointerCancel={onCanvasPointerUp}
+              onWheel={onCanvasWheel}
+            />
+          ) : (
+            <div className="devtools-atlas-placeholder">Загрузите атлас, чтобы включить редактор маркеров.</div>
+          )}
+        </div>
+
+        <div className="frame-selector-bar">
+          {selectedSprite ? (
+            <>
+              {Array.from({ length: selectedSprite.frameCount }, (_, i) => (
+                <button
+                  key={i}
+                  type="button"
+                  className={`frame-chip${selectedFrameIndex === i ? ' active' : ''}`}
+                  onClick={() => {
+                    setSelectedFrameIndex(i);
+                    if (selectedSprite.confirmed && selectedSprite.anchors[i]) {
+                      setLastMovedAnchor({ spriteId: selectedSprite.id, frameIndex: i });
+                    }
+                  }}
+                >
+                  {i + 1}
+                </button>
+              ))}
+              <button className="devtools-btn tiny" type="button" onClick={addFrame}>+ Кадр</button>
+            </>
+          ) : (
+            <span className="devtools-hint">Выберите спрайт для просмотра кадров</span>
+          )}
+        </div>
+      </div>
+
+      <div className="devtools-editor">
+        {selectedSprite ? (
+          <>
+            <label className="devtools-field editor-name-field">
+              <span>Имя</span>
+              <input
+                value={selectedSprite.name}
+                onChange={(e) => updateSprite(selectedSprite.id, { name: e.target.value })}
               />
-            ) : (
-              <div className="devtools-atlas-placeholder">Загрузите атлас, чтобы включить редактор маркеров.</div>
-            )}
-          </div>
-
-          <p className="devtools-hint">
-            Якорь двигает позицию кадра. Для последнего перемещенного якоря показывается перекрестие в правом нижнем углу рамки.
-            Перетаскивание перекрестия меняет размеры кадра сразу для всех кадров выбранного спрайта.
-          </p>
-        </div>
-
-        <div className="devtools-panel devtools-sprites-panel">
-          <h2>3. Список спрайтов</h2>
-          <div className="devtools-sprites-actions">
-            <button className="devtools-btn" type="button" onClick={() => addSprite()}>Добавить спрайт</button>
-          </div>
-
-          {sprites.length === 0 ? <p className="devtools-hint">Список пуст. Добавьте первый спрайт.</p> : null}
-
-          <div className="sprite-cards">
-            {sprites.map((sprite) => (
-              <div key={sprite.id} className={`sprite-card ${sprite.id === selectedSpriteId ? 'selected' : ''}`}>
-                <label className="devtools-field">
-                  <span>Имя спрайта</span>
-                  <input
-                    value={sprite.name}
-                    onFocus={() => selectSprite(sprite.id)}
-                    onChange={(e) => updateSprite(sprite.id, { name: e.target.value })}
-                  />
-                </label>
-
-                <NumberStepperField
-                  label="Количество кадров"
-                  value={sprite.frameCount}
-                  min={1}
-                  onChange={(next) => updateSprite(sprite.id, { frameCount: clampPositiveInt(next, sprite.frameCount), confirmed: false })}
-                />
-
-                <NumberStepperField
-                  label="Ширина кадра"
-                  value={sprite.frameWidth}
-                  min={1}
-                  onChange={(next) => updateSprite(sprite.id, { frameWidth: clampPositiveInt(next, sprite.frameWidth), confirmed: false })}
-                />
-
-                <NumberStepperField
-                  label="Высота кадра"
-                  value={sprite.frameHeight}
-                  min={1}
-                  onChange={(next) => updateSprite(sprite.id, { frameHeight: clampPositiveInt(next, sprite.frameHeight), confirmed: false })}
-                />
-
-                <div className="sprite-card-actions">
-                  <button className="devtools-btn primary" type="button" onClick={() => confirmSprite(sprite)}>
-                    Подтвердить
-                  </button>
-                  <button className="devtools-btn tiny danger" type="button" onClick={() => deleteSprite(sprite.id)}>
-                    Удалить
-                  </button>
-                </div>
-
-                <div className="sprite-status">
-                  {sprite.confirmed ? `Маркеров на атласе: ${sprite.anchors.length}` : 'Не подтвержден'}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
+            </label>
+            <NumberStepperField
+              label="Ширина кадра"
+              value={selectedSprite.frameWidth}
+              min={1}
+              onChange={(next) => updateSprite(selectedSprite.id, { frameWidth: clampPositiveInt(next, selectedSprite.frameWidth), confirmed: false })}
+            />
+            <NumberStepperField
+              label="Высота кадра"
+              value={selectedSprite.frameHeight}
+              min={1}
+              onChange={(next) => updateSprite(selectedSprite.id, { frameHeight: clampPositiveInt(next, selectedSprite.frameHeight), confirmed: false })}
+            />
+            <button className="devtools-btn primary" type="button" onClick={() => confirmSprite(selectedSprite)}>Подтвердить</button>
+            <button className="devtools-btn tiny danger" type="button" onClick={() => deleteSprite(selectedSprite.id)}>Удалить</button>
+            <span className="sprite-status">{selectedSprite.confirmed ? `Маркеров: ${selectedSprite.anchors.length}` : 'Не подтвержден'}</span>
+          </>
+        ) : (
+          <span className="devtools-hint">Выберите или добавьте спрайт</span>
+        )}
+      </div>
     </div>
   );
 }

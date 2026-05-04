@@ -11,3 +11,4 @@
 - 2026w15-0.9 — require confirm before slicing and add draggable control points
 - 2026w15-0.10 — improve mobile handle size and repeat guide lines from control points
 - 2026w15-0.11 — redesign atlas tool with zoom pan and anchor crosshair markers
+- 2026w15-0.12 — single-column layout: sprite/frame chips around atlas, editor strip below

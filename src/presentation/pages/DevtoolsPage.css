@@ -13,17 +13,37 @@
 .devtools-header {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: 1rem;
   flex-wrap: wrap;
   flex-shrink: 0;
-  padding: 0.55rem 1rem;
+  padding: 0.35rem 1rem;
   background: #17172a;
   border-bottom: 1px solid #2a2a40;
 }
 
+.devtools-header-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.devtools-link.subtle {
+  color: #7b7b9e;
+  text-decoration: none;
+  font-size: 0.85rem;
+  background: none;
+  border: none;
+  padding: 0;
+}
+
+.devtools-link.subtle:hover {
+  color: #c8c8f0;
+  background: none;
+}
+
 .devtools-title {
   margin: 0;
-  font-size: 1rem;
+  font-size: 0.95rem;
   white-space: nowrap;
   color: #e8e8f8;
 }
@@ -71,21 +91,6 @@
   margin-left: auto;
 }
 
-.devtools-link {
-  color: #e8e8f0;
-  text-decoration: none;
-  background: #22223a;
-  border: 1px solid #34345a;
-  border-radius: 8px;
-  padding: 0.35rem 0.65rem;
-  font-size: 0.82rem;
-  white-space: nowrap;
-}
-
-.devtools-link:hover {
-  background: #2e2e4d;
-}
-
 /* ─── Error bar ───────────────────────────────────────────────── */
 .devtools-error {
   flex-shrink: 0;
@@ -125,22 +130,54 @@
 
 .devtools-edit-row {
   display: flex;
+  min-width: 0;
+  padding: 0;
+  border-bottom: 1px solid #252540;
+  background: #12122a;
+}
+
+.devtools-edit-split {
+  display: flex;
+  width: 100%;
+  min-height: 48px;
+}
+.devtools-edit-split.empty {
+  padding: 0.35rem 0.75rem;
+  align-items: center;
+}
+
+.devtools-edit-controls {
+  flex: 1;
+  display: flex;
   align-items: center;
   flex-wrap: wrap;
   gap: 0.5rem;
-  padding: 0.35rem 5.8rem 0.45rem 0.75rem;
-  border-bottom: 1px solid #252540;
-  position: relative;
+  padding: 0.35rem 0.75rem;
+}
+
+.devtools-sprite-preview {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #0b0c16;
+  border-left: 1px solid #252540;
+  padding: 0.25rem;
+  min-height: 50px;
+  overflow: hidden;
+}
+
+.sprite-preview-image {
+  background-repeat: no-repeat;
+  image-rendering: pixelated;
+  transform: scale(2);
+  transform-origin: center;
 }
 
 .delete-slot {
-  position: absolute;
-  top: 0.3rem;
-  right: 0.75rem;
-  width: 5.05rem;
+  margin-left: auto;
   display: flex;
   align-items: center;
-  justify-content: flex-end;
   gap: 0.35rem;
 }
 

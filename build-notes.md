@@ -18,3 +18,4 @@
 - 2026w15-0.16 — refine delete icon flow and fix passive wheel warning in atlas viewer
 - 2026w15-0.17 — improve devtools visual hierarchy and delete button usability
 - 2026w15-0.18 — make devtools visuals clearly stronger
+- 2026w15-0.19 — ui layout refinement: compact header, reduced marker sizes and inner icons, inline edit controls + right pane sprite preview

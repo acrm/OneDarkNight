@@ -31,7 +31,7 @@ interface NumberStepperFieldProps {
   step?: number;
 }
 
-const MARKER_VISUAL_RADIUS_UI = 20;
+const MARKER_VISUAL_RADIUS_UI = 12;
 const MARKER_HIT_RADIUS_UI = 30;
 const VIEW_MIN_SCALE = 0.25;
 const VIEW_MAX_SCALE = 12;
@@ -365,7 +365,7 @@ export function DevtoolsPage() {
         const isActiveFrame = markerModel.activeFrameIndex === idx;
         const frameStroke = isActiveFrame ? '#ff7b1f' : '#3f6f93aa';
         const anchorFill = isActiveFrame ? '#ff7b1f' : '#1ea7c8cc';
-        const anchorDrawRadius = isActiveFrame ? markerRadius * 1.08 : markerRadius * 0.72;
+        const anchorDrawRadius = markerRadius; // Do not differentiate by size
 
         ctx.strokeStyle = isActiveFrame ? '#000000dd' : '#00000099';
         ctx.lineWidth = isActiveFrame ? baseLineWidth + 2 / viewScale : baseLineWidth + 1.2 / viewScale;
@@ -399,16 +399,16 @@ export function DevtoolsPage() {
           ctx,
           anchor.x,
           anchor.y,
-          anchorDrawRadius * 1.45,
+          anchorDrawRadius * 0.7, // make it fit inside
           isActiveFrame ? '#0b1022' : '#10253a',
-          Math.max(1.4, 1.8 / viewScale)
+          Math.max(1.0, 1.4 / viewScale)
         );
 
         if (isActiveFrame) {
           const crossX = right;
           const crossY = bottom;
-          const crossRadius = markerRadius + 2 / viewScale;
-          const crossLine = markerRadius * 0.7;
+          const crossRadius = markerRadius;
+          const crossLine = markerRadius * 0.65;
 
           ctx.beginPath();
           ctx.arc(crossX, crossY, crossRadius, 0, Math.PI * 2);
@@ -417,7 +417,7 @@ export function DevtoolsPage() {
           ctx.lineWidth = baseLineWidth;
           ctx.strokeStyle = '#111827';
           ctx.stroke();
-          drawCornerIcon(ctx, crossX, crossY, crossLine * 1.5, '#111827', Math.max(2.4, 2.8 / viewScale));
+          drawCornerIcon(ctx, crossX, crossY, crossLine, '#111827', Math.max(1.8, 2.2 / viewScale));
         }
       }
     }
@@ -812,7 +812,10 @@ export function DevtoolsPage() {
   return (
     <div className="devtools-page">
       <header className="devtools-header">
-        <h1 className="devtools-title">Atlas Devtool</h1>
+        <div className="devtools-header-brand">
+          <a className="devtools-link subtle" href="#/">← В игру</a>
+          <h1 className="devtools-title">Atlas Devtool</h1>
+        </div>
         <div className="devtools-header-controls">
           <label className="devtools-file-btn">
             PNG
@@ -828,7 +831,6 @@ export function DevtoolsPage() {
           ) : null}
         </div>
         <div className="devtools-header-actions">
-          <a className="devtools-link" href="#/">← Игра</a>
           <button className="devtools-btn tiny danger" onClick={resetTool} type="button">Сброс</button>
         </div>
       </header>
@@ -855,63 +857,82 @@ export function DevtoolsPage() {
 
           <div className="devtools-edit-row">
             {selectedSprite ? (
-              <>
-                <label className="devtools-field compact-name-field">
-                  <span>Имя</span>
-                  <input
-                    value={selectedSprite.name ?? ''}
-                    onChange={(e) => updateSprite(selectedSprite.id, { name: e.target.value })}
-                    onBlur={() => {
-                      const safeName = selectedSprite.name?.trim() ? selectedSprite.name : defaultSpriteName(selectedSprite);
-                      updateSprite(selectedSprite.id, { name: safeName });
-                      if (atlasImage) ensureSpriteDefaults({ ...selectedSprite, name: safeName }, selectedFrameIndex);
+              <div className="devtools-edit-split">
+                <div className="devtools-edit-controls">
+                  <label className="devtools-field compact-name-field">
+                    <span>Имя</span>
+                    <input
+                      value={selectedSprite.name ?? ''}
+                      onChange={(e) => updateSprite(selectedSprite.id, { name: e.target.value })}
+                      onBlur={() => {
+                        const safeName = selectedSprite.name?.trim() ? selectedSprite.name : defaultSpriteName(selectedSprite);
+                        updateSprite(selectedSprite.id, { name: safeName });
+                        if (atlasImage) ensureSpriteDefaults({ ...selectedSprite, name: safeName }, selectedFrameIndex);
+                      }}
+                    />
+                  </label>
+                  <NumberStepperField
+                    label="Ширина"
+                    value={selectedSpriteFrameWidth}
+                    fallbackValue={grid.cellWidth}
+                    min={1}
+                    onChange={(next) => updateSprite(selectedSprite.id, { frameWidth: clampPositiveInt(next, selectedSpriteFrameWidth), confirmed: false })}
+                    onBlurCommit={(next) => {
+                      if (atlasImage) ensureSpriteDefaults({ ...selectedSprite, frameWidth: next }, selectedFrameIndex);
                     }}
                   />
-                </label>
-                <NumberStepperField
-                  label="Ширина"
-                  value={selectedSpriteFrameWidth}
-                  fallbackValue={grid.cellWidth}
-                  min={1}
-                  onChange={(next) => updateSprite(selectedSprite.id, { frameWidth: clampPositiveInt(next, selectedSpriteFrameWidth), confirmed: false })}
-                  onBlurCommit={(next) => {
-                    if (atlasImage) ensureSpriteDefaults({ ...selectedSprite, frameWidth: next }, selectedFrameIndex);
-                  }}
-                />
-                <NumberStepperField
-                  label="Высота"
-                  value={selectedSpriteFrameHeight}
-                  fallbackValue={grid.cellHeight}
-                  min={1}
-                  onChange={(next) => updateSprite(selectedSprite.id, { frameHeight: clampPositiveInt(next, selectedSpriteFrameHeight), confirmed: false })}
-                  onBlurCommit={(next) => {
-                    if (atlasImage) ensureSpriteDefaults({ ...selectedSprite, frameHeight: next }, selectedFrameIndex);
-                  }}
-                />
-                <div className="delete-slot">
-                  {deleteConfirmSpriteId === selectedSprite.id ? (
-                    <>
-                      <button className="devtools-btn tiny danger icon-btn delete-confirm-btn" type="button" title="Подтвердить удаление" onClick={handleConfirmDelete}>
-                        <i className="fa-solid fa-check" aria-hidden="true" />
+                  <NumberStepperField
+                    label="Высота"
+                    value={selectedSpriteFrameHeight}
+                    fallbackValue={grid.cellHeight}
+                    min={1}
+                    onChange={(next) => updateSprite(selectedSprite.id, { frameHeight: clampPositiveInt(next, selectedSpriteFrameHeight), confirmed: false })}
+                    onBlurCommit={(next) => {
+                      if (atlasImage) ensureSpriteDefaults({ ...selectedSprite, frameHeight: next }, selectedFrameIndex);
+                    }}
+                  />
+                  <div className="delete-slot">
+                    {deleteConfirmSpriteId === selectedSprite.id ? (
+                      <>
+                        <button className="devtools-btn tiny danger icon-btn delete-confirm-btn" type="button" title="Подтвердить удаление" onClick={handleConfirmDelete}>
+                          <i className="fa-solid fa-check" aria-hidden="true" />
+                        </button>
+                        <button className="devtools-btn tiny icon-btn delete-cancel-btn" type="button" title="Отмена удаления" onClick={() => setDeleteConfirmSpriteId(null)}>
+                          <i className="fa-solid fa-xmark" aria-hidden="true" />
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        className="devtools-btn tiny danger icon-btn delete-trash-btn"
+                        type="button"
+                        title="Удалить спрайт"
+                        onClick={() => setDeleteConfirmSpriteId(selectedSprite.id)}
+                      >
+                        <i className="fa-solid fa-trash-can" aria-hidden="true" />
                       </button>
-                      <button className="devtools-btn tiny icon-btn delete-cancel-btn" type="button" title="Отмена удаления" onClick={() => setDeleteConfirmSpriteId(null)}>
-                        <i className="fa-solid fa-xmark" aria-hidden="true" />
-                      </button>
-                    </>
-                  ) : (
-                    <button
-                      className="devtools-btn tiny danger icon-btn delete-trash-btn"
-                      type="button"
-                      title="Удалить спрайт"
-                      onClick={() => setDeleteConfirmSpriteId(selectedSprite.id)}
-                    >
-                      <i className="fa-solid fa-trash-can" aria-hidden="true" />
-                    </button>
-                  )}
+                    )}
+                  </div>
                 </div>
-              </>
+                
+                <div className="devtools-sprite-preview">
+                  {atlasDataUrl && getSpriteAnchors(selectedSprite)[selectedFrameIndex] ? (
+                    <div
+                      className="sprite-preview-image"
+                      style={{
+                        width: `${selectedSpriteFrameWidth}px`,
+                        height: `${selectedSpriteFrameHeight}px`,
+                        backgroundImage: `url(${atlasDataUrl})`,
+                        backgroundPosition: `-${getSpriteAnchors(selectedSprite)[selectedFrameIndex].x - selectedSpriteFrameWidth / 2}px -${getSpriteAnchors(selectedSprite)[selectedFrameIndex].y - selectedSpriteFrameHeight / 2}px`,
+                        backgroundSize: `${imageWidth}px ${imageHeight}px`
+                      }}
+                    />
+                  ) : <span className="devtools-hint">Нет превью</span>}
+                </div>
+              </div>
             ) : (
-              <span className="devtools-hint">Выберите или добавьте спрайт</span>
+              <div className="devtools-edit-split empty">
+                <span className="devtools-hint">Выберите или добавьте спрайт</span>
+              </div>
             )}
           </div>
 

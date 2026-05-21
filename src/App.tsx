@@ -1,8 +1,9 @@
 import './App.css';
-import { useEffect, useMemo, useSyncExternalStore } from 'react';
+import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { useGameStore } from './application/gameStore';
 import { useStoryLibraryStore } from './application/storyLibraryStore';
 import { getStoryTemplate } from './domain/storyTemplates';
+import { StoryListManagerModal } from './presentation/components/StoryListManagerModal';
 import { GamePage } from './presentation/pages/GamePage';
 import { DevtoolsPage } from './presentation/pages/DevtoolsPage';
 
@@ -22,8 +23,10 @@ function App() {
   const route = useSyncExternalStore(subscribeRoute, getRoute, () => 'game');
   const stories = useStoryLibraryStore((state) => state.stories);
   const activeStoryId = useStoryLibraryStore((state) => state.activeStoryId);
+  const setActiveStoryId = useStoryLibraryStore((state) => state.setActiveStoryId);
   const customScenesByStoryId = useStoryLibraryStore((state) => state.customScenesByStoryId);
   const revisionByStoryId = useStoryLibraryStore((state) => state.revisionByStoryId);
+  const [isStoryListOpen, setStoryListOpen] = useState(false);
   const activeStory = useMemo(
     () => stories.find((story) => story.id === activeStoryId) ?? stories[0],
     [stories, activeStoryId]
@@ -49,6 +52,30 @@ function App() {
         <div className="mobile-story-title-wrap">
           <span className="platform-name">Play My Story</span>
           <h1 className="story-title">{activeStory?.title ?? 'Story'}</h1>
+          {route === 'edit' ? (
+            <div className="header-story-switch-row">
+              <select
+                className="header-story-select"
+                value={activeStoryId}
+                onChange={(event) => setActiveStoryId(event.target.value)}
+              >
+                {stories.map((story) => (
+                  <option key={story.id} value={story.id}>
+                    {story.title}{story.isBuiltIn ? ' (demo)' : ''}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                className="header-story-list-btn"
+                onClick={() => setStoryListOpen(true)}
+                title="Редактировать список историй"
+                aria-label="Редактировать список историй"
+              >
+                <i className="fa-solid fa-list" />
+              </button>
+            </div>
+          ) : null}
         </div>
         <div className="mobile-story-actions">
           {isGameMode ? (
@@ -75,6 +102,7 @@ function App() {
       <div className="app-content">
         {route === 'edit' ? <DevtoolsPage /> : <GamePage />}
       </div>
+      <StoryListManagerModal isOpen={isStoryListOpen} onClose={() => setStoryListOpen(false)} />
     </div>
   );
 }

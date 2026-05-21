@@ -3,7 +3,6 @@ import { useDevtoolsStore } from '../../application/devtoolsStore';
 import { useStoryLibraryStore } from '../../application/storyLibraryStore';
 import { clampPositiveInt, toAtlasDocument } from '../../application/spriteAtlasUtils';
 import type { AtlasDocument, SpriteDefinition } from '../../application/devtoolsTypes';
-import { StoryEditorPanel } from '../components/StoryEditorPanel';
 import { StoryStructureEditor } from '../components/StoryStructureEditor';
 import { WorldEditorPanel } from '../components/WorldEditorPanel';
 import './DevtoolsPage.css';
@@ -868,7 +867,6 @@ export function DevtoolsPage() {
 
   return (
     <div className="devtools-page">
-      <StoryEditorPanel />
       <div className="editor-tabs" role="tablist" aria-label="Секции редактора">
         <button
           type="button"

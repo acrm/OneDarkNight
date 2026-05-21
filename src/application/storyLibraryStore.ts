@@ -11,6 +11,14 @@ export interface StoryLibraryEntry {
   createdAt: number;
 }
 
+export interface StoryLibraryImportPayload {
+  stories: StoryLibraryEntry[];
+  activeStoryId?: string;
+  customScenesByStoryId?: Record<string, Scene[]>;
+  revisionByStoryId?: Record<string, number>;
+  worldNotesByStoryId?: Record<string, string>;
+}
+
 interface StoryLibraryStore {
   stories: StoryLibraryEntry[];
   activeStoryId: string;
@@ -24,6 +32,7 @@ interface StoryLibraryStore {
   updateStoryScenes: (storyId: string, scenes: Scene[]) => void;
   resetStoryScenes: (storyId: string) => void;
   updateWorldNotes: (storyId: string, notes: string) => void;
+  importLibrary: (payload: StoryLibraryImportPayload) => void;
 }
 
 const BUILTIN_STORIES: StoryLibraryEntry[] = [
@@ -44,6 +53,11 @@ const BUILTIN_STORIES: StoryLibraryEntry[] = [
 ];
 
 const normalizeTitle = (title: string): string => title.trim().slice(0, 80);
+
+const normalizeTemplateId = (value: string | undefined): StoryTemplateId => {
+  if (value === 'metro-last-train') return 'metro-last-train';
+  return 'one-dark-night';
+};
 
 const ensureBuiltInStories = (stories: StoryLibraryEntry[]): StoryLibraryEntry[] => {
   const map = new Map(stories.map((story) => [story.id, story]));
@@ -174,6 +188,46 @@ export const useStoryLibraryStore = create<StoryLibraryStore>()(
             [storyId]: notes.slice(0, 8000),
           },
         }));
+      },
+      importLibrary: (payload: StoryLibraryImportPayload) => {
+        set(() => {
+          const incomingStories = Array.isArray(payload?.stories) ? payload.stories : [];
+
+          const normalizedStories = ensureBuiltInStories(
+            incomingStories
+              .filter((story) => story && typeof story.id === 'string')
+              .map((story) => ({
+                ...story,
+                title: normalizeTitle(story.title) || 'История',
+                templateId: normalizeTemplateId(story.templateId),
+                createdAt: Number.isFinite(story.createdAt) ? story.createdAt : Date.now(),
+              }))
+          );
+
+          const customScenesByStoryId: Record<string, Scene[]> = {};
+          const revisionByStoryId: Record<string, number> = {};
+          const worldNotesByStoryId: Record<string, string> = {};
+
+          for (const story of normalizedStories) {
+            const importedScenes = payload?.customScenesByStoryId?.[story.id];
+            const fallbackScenes = cloneScenes(getStoryTemplate(story.templateId).scenes);
+            customScenesByStoryId[story.id] = cloneScenes(importedScenes && importedScenes.length > 0 ? importedScenes : fallbackScenes);
+            revisionByStoryId[story.id] = Math.max(1, Number(payload?.revisionByStoryId?.[story.id] ?? 1));
+            worldNotesByStoryId[story.id] = (payload?.worldNotesByStoryId?.[story.id] ?? '').slice(0, 8000);
+          }
+
+          const activeStoryId = normalizedStories.some((story) => story.id === payload?.activeStoryId)
+            ? (payload.activeStoryId as string)
+            : normalizedStories[0]?.id ?? 'story-one-dark-night';
+
+          return {
+            stories: normalizedStories,
+            activeStoryId,
+            customScenesByStoryId,
+            revisionByStoryId,
+            worldNotesByStoryId,
+          };
+        });
       },
     }),
     {

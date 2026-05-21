@@ -9,12 +9,12 @@ Default bundled demo story: **One Dark Night**.
 | Domain | `src/domain/` | Types, scene data, structured rules, house map, item taxonomy, story templates. Pure TS. |
 | Application | `src/application/` | Zustand game store + consequence engine + threat progression + story library |
 | Infrastructure | `src/infrastructure/` | localStorage adapter |
-| Presentation | `src/presentation/` | React components/pages (room context, threat feedback, TV panel, story selector, tabs: story/illustrations/world) |
+| Presentation | `src/presentation/` | React components/pages (room context, threat feedback, header story picker, tabs: scenes/illustrations/world) |
 
 ## Story Layering
 
 - `src/domain/storyTemplates.ts`: canonical templates (`one-dark-night`, `metro-last-train`), initial state and scene maps.
-- `src/application/storyLibraryStore.ts`: persisted list of stories (built-in + user), active story selection, create/rename/delete operations, editable scene payloads, world notes.
+- `src/application/storyLibraryStore.ts`: persisted list of stories (built-in + user), active story selection, create/rename/delete/import operations, editable scene payloads, world notes.
 - `src/application/gameStore.ts`: per-story runtime snapshots and scene progression based on active edited scene set.
 
 ## Developer Tooling Slice
@@ -22,7 +22,7 @@ Default bundled demo story: **One Dark Night**.
 - `src/application/devtoolsStore.ts`: isolated Zustand persist state for atlas tooling.
 - `src/application/devtoolsTypes.ts`: data contracts for atlas config, sprites, and export schema.
 - `src/application/spriteAtlasUtils.ts`: frame slicing, frame sequence parsing, background color-key removal, export mapping.
-- `src/presentation/pages/DevtoolsPage.tsx`: separate hash-routed editor page (`#/edit`, legacy `#/devtools`) with switchable sections for story structure, illustrations atlas, and world notes.
+- `src/presentation/pages/DevtoolsPage.tsx`: separate hash-routed editor page (`#/edit`, legacy `#/devtools`) with switchable sections for scene editing, illustrations atlas, and world notes.
 
 The tooling slice is isolated from the game state (`useGameStore`) and does not alter gameplay domain logic.
 

@@ -24,3 +24,4 @@
 - 2026w15-0.22 — add multi-story library with persistent story sessions and edit-mode story management
 - 2026w15-0.23 — add full story structure editor in edit mode and play edited story flow
 - 2026w15-0.24 — add editor section switchers and sync story/world editors with active story
+- 2026w15-0.25 — move story picker to header, add story list manager and advanced scene editor controls

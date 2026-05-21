@@ -1,12 +1,15 @@
 import { ChangeEvent, PointerEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useDevtoolsStore } from '../../application/devtoolsStore';
+import { useStoryLibraryStore } from '../../application/storyLibraryStore';
 import { clampPositiveInt, toAtlasDocument } from '../../application/spriteAtlasUtils';
 import type { AtlasDocument, SpriteDefinition } from '../../application/devtoolsTypes';
 import { StoryEditorPanel } from '../components/StoryEditorPanel';
 import { StoryStructureEditor } from '../components/StoryStructureEditor';
+import { WorldEditorPanel } from '../components/WorldEditorPanel';
 import './DevtoolsPage.css';
 
 type DragMode = 'pan' | 'anchor' | 'crosshair';
+type EditTab = 'story' | 'illustrations' | 'world';
 
 interface DragState {
   mode: DragMode;
@@ -210,6 +213,8 @@ const createInitialAnchors = (
 };
 
 export function DevtoolsPage() {
+  const activeStoryId = useStoryLibraryStore((state) => state.activeStoryId);
+  const [activeTab, setActiveTab] = useState<EditTab>('story');
   const {
     atlasDataUrl,
     atlasFileName,
@@ -864,7 +869,41 @@ export function DevtoolsPage() {
   return (
     <div className="devtools-page">
       <StoryEditorPanel />
-      <StoryStructureEditor />
+      <div className="editor-tabs" role="tablist" aria-label="Секции редактора">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeTab === 'story'}
+          className={`editor-tab-btn${activeTab === 'story' ? ' active' : ''}`}
+          onClick={() => setActiveTab('story')}
+        >
+          История
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeTab === 'illustrations'}
+          className={`editor-tab-btn${activeTab === 'illustrations' ? ' active' : ''}`}
+          onClick={() => setActiveTab('illustrations')}
+        >
+          Иллюстрации
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeTab === 'world'}
+          className={`editor-tab-btn${activeTab === 'world' ? ' active' : ''}`}
+          onClick={() => setActiveTab('world')}
+        >
+          Мир
+        </button>
+      </div>
+
+      {activeTab === 'story' ? <StoryStructureEditor key={`story-${activeStoryId}`} /> : null}
+      {activeTab === 'world' ? <WorldEditorPanel key={`world-${activeStoryId}`} /> : null}
+
+      {activeTab === 'illustrations' ? (
+      <>
       <div className="devtools-header">
         <div className="devtools-header-controls">
           <label className="devtools-file-btn">
@@ -1073,6 +1112,8 @@ export function DevtoolsPage() {
           <span className="viewer-scale">{Math.round(viewScale * 100)}%</span>
         </div>
       </div>
+      </>
+      ) : null}
     </div>
   );
 }

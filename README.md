@@ -10,6 +10,8 @@ Mobile-first platform for creating interactive stories. The default loaded demo 
 - In edit mode you can create, rename, and delete user stories (based on a template)
 - In edit mode you can edit full scene structure (scene title/location/text + choices + transitions)
 - Play mode launches the active edited story version immediately
+- Edit mode now has section switchers: `История` / `Иллюстрации` / `Мир`
+- When active story changes, the opened editor section reloads for that story
 - Mixed consequence model: instant fatal, deferred fatal, escalation, reversible branch
 - TV night system with horror broadcasts and entity breach scenes
 - Rule-driven nights: peephole, bathroom mirror window, TV lockout behavior
@@ -35,6 +37,7 @@ npm run bump:build -- --desc "description"  # version bump
 - Open `#/edit` in the app (legacy alias `#/devtools` still works).
 - Top story panel in edit mode controls active story and user-story management.
 - Story Structure Editor shows all scenes of the active story and lets you modify transitions before playing.
+- `Мир` section provides world notes and location overview for the active story.
 - Upload atlas image (PNG/JPG/WebP), then use zoom and pan to position the view on desktop and mobile.
 - Sprite list starts empty: add a sprite, set name, frame count, frame width and frame height, then confirm.
 - After confirmation, atlas displays one anchor marker per frame for the sprite.

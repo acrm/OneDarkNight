@@ -1,0 +1,63 @@
+.world-editor {
+  border-bottom: 1px solid #2a2a40;
+  background: #10162b;
+  padding: 0.55rem 0.75rem 0.7rem;
+}
+
+.world-editor-head h2 {
+  margin: 0;
+  font-size: 0.9rem;
+  color: #f0f4ff;
+}
+
+.world-editor-head p {
+  margin: 0.2rem 0 0;
+  font-size: 0.74rem;
+  color: #95a0c8;
+}
+
+.world-locations {
+  margin-top: 0.5rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.world-location-chip {
+  border: 1px solid #3a4c7d;
+  background: #1e2d4e;
+  color: #dce7ff;
+  font-size: 0.72rem;
+  border-radius: 999px;
+  padding: 0.18rem 0.5rem;
+}
+
+.world-empty {
+  color: #8f9ac2;
+  font-size: 0.72rem;
+}
+
+.world-notes {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin-top: 0.55rem;
+}
+
+.world-notes span {
+  font-size: 0.68rem;
+  color: #93a2d1;
+}
+
+.world-notes textarea {
+  width: 100%;
+  min-height: 116px;
+  resize: vertical;
+  border: 1px solid #364774;
+  border-radius: 8px;
+  background: #1c2645;
+  color: #f0f4ff;
+  padding: 0.45rem 0.55rem;
+  font-size: 0.8rem;
+  font-family: inherit;
+}

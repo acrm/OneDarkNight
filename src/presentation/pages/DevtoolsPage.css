@@ -9,6 +9,39 @@
   font-family: inherit;
 }
 
+.editor-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 0.35rem;
+  padding: 0.45rem 0.75rem;
+  border-bottom: 1px solid #2a2a40;
+  background: #101426;
+}
+
+.editor-tab-btn {
+  height: 34px;
+  border: 1px solid #3a456d;
+  border-radius: 9px;
+  background: #202a47;
+  color: #d6deff;
+  font-size: 0.8rem;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.editor-tab-btn:hover,
+.editor-tab-btn:focus {
+  background: #27365e;
+  border-color: #5d77b8;
+  outline: none;
+}
+
+.editor-tab-btn.active {
+  background: #36589b;
+  border-color: #84a8f1;
+  color: #eef5ff;
+}
+
 /* ─── Toolbar ─────────────────────────────────────────────────── */
 .devtools-header {
   display: flex;

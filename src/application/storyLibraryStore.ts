@@ -16,12 +16,14 @@ interface StoryLibraryStore {
   activeStoryId: string;
   customScenesByStoryId: Record<string, Scene[]>;
   revisionByStoryId: Record<string, number>;
+  worldNotesByStoryId: Record<string, string>;
   setActiveStoryId: (id: string) => void;
   createStory: (title: string, templateId?: StoryTemplateId) => string;
   renameStory: (id: string, title: string) => void;
   deleteStory: (id: string) => void;
   updateStoryScenes: (storyId: string, scenes: Scene[]) => void;
   resetStoryScenes: (storyId: string) => void;
+  updateWorldNotes: (storyId: string, notes: string) => void;
 }
 
 const BUILTIN_STORIES: StoryLibraryEntry[] = [
@@ -66,6 +68,10 @@ export const useStoryLibraryStore = create<StoryLibraryStore>()(
         'story-one-dark-night': 1,
         'story-metro-last-train': 1,
       },
+      worldNotesByStoryId: {
+        'story-one-dark-night': '',
+        'story-metro-last-train': '',
+      },
       setActiveStoryId: (id: string) => {
         const exists = get().stories.some((story) => story.id === id);
         if (!exists) return;
@@ -94,6 +100,10 @@ export const useStoryLibraryStore = create<StoryLibraryStore>()(
             ...state.revisionByStoryId,
             [id]: 1,
           },
+          worldNotesByStoryId: {
+            ...state.worldNotesByStoryId,
+            [id]: '',
+          },
         }));
         return id;
       },
@@ -115,14 +125,17 @@ export const useStoryLibraryStore = create<StoryLibraryStore>()(
         const fallbackStory = nextStories[0] ?? BUILTIN_STORIES[0];
         const nextCustomScenesByStoryId = { ...state.customScenesByStoryId };
         const nextRevisionByStoryId = { ...state.revisionByStoryId };
+        const nextWorldNotesByStoryId = { ...state.worldNotesByStoryId };
         delete nextCustomScenesByStoryId[id];
         delete nextRevisionByStoryId[id];
+        delete nextWorldNotesByStoryId[id];
 
         set({
           stories: ensureBuiltInStories(nextStories),
           activeStoryId: state.activeStoryId === id ? fallbackStory.id : state.activeStoryId,
           customScenesByStoryId: nextCustomScenesByStoryId,
           revisionByStoryId: nextRevisionByStoryId,
+          worldNotesByStoryId: nextWorldNotesByStoryId,
         });
       },
       updateStoryScenes: (storyId: string, scenes: Scene[]) => {
@@ -154,10 +167,18 @@ export const useStoryLibraryStore = create<StoryLibraryStore>()(
           };
         });
       },
+      updateWorldNotes: (storyId: string, notes: string) => {
+        set((state) => ({
+          worldNotesByStoryId: {
+            ...state.worldNotesByStoryId,
+            [storyId]: notes.slice(0, 8000),
+          },
+        }));
+      },
     }),
     {
       name: 'play-my-story-library',
-      version: 2,
+      version: 3,
       migrate: (persistedState) => {
         const incoming = persistedState as Partial<StoryLibraryStore> | undefined;
         const stories = ensureBuiltInStories(incoming?.stories ?? BUILTIN_STORIES);
@@ -168,11 +189,13 @@ export const useStoryLibraryStore = create<StoryLibraryStore>()(
         const incomingScenes = incoming?.customScenesByStoryId ?? {};
         const customScenesByStoryId: Record<string, Scene[]> = {};
         const revisionByStoryId: Record<string, number> = {};
+        const worldNotesByStoryId: Record<string, string> = {};
 
         for (const story of stories) {
           const fallbackScenes = cloneScenes(getStoryTemplate(story.templateId).scenes);
           customScenesByStoryId[story.id] = cloneScenes(incomingScenes[story.id] ?? fallbackScenes);
           revisionByStoryId[story.id] = incoming?.revisionByStoryId?.[story.id] ?? 1;
+          worldNotesByStoryId[story.id] = incoming?.worldNotesByStoryId?.[story.id] ?? '';
         }
 
         return {
@@ -180,6 +203,7 @@ export const useStoryLibraryStore = create<StoryLibraryStore>()(
           activeStoryId,
           customScenesByStoryId,
           revisionByStoryId,
+          worldNotesByStoryId,
         } as Partial<StoryLibraryStore>;
       },
     }

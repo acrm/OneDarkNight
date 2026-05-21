@@ -23,3 +23,4 @@
 - 2026w15-0.21 — rebrand to Play My Story with global mobile game-edit header
 - 2026w15-0.22 — add multi-story library with persistent story sessions and edit-mode story management
 - 2026w15-0.23 — add full story structure editor in edit mode and play edited story flow
+- 2026w15-0.24 — add editor section switchers and sync story/world editors with active story

@@ -1,0 +1,74 @@
+.story-editor-panel {
+  display: flex;
+  gap: 0.45rem;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid #2a2a40;
+  background: #13152a;
+}
+
+.story-select-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 190px;
+  flex: 1;
+}
+
+.story-select-wrap span {
+  font-size: 0.68rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #8e92b8;
+}
+
+.story-select-wrap select {
+  height: 34px;
+  border: 1px solid #3a3f65;
+  border-radius: 8px;
+  background: #1f2342;
+  color: #f2f4ff;
+  padding: 0 0.6rem;
+  font-size: 0.82rem;
+  font-family: inherit;
+}
+
+.story-panel-btn {
+  height: 34px;
+  border: 1px solid #3a3f65;
+  border-radius: 8px;
+  background: #232a4d;
+  color: #f2f4ff;
+  padding: 0 0.6rem;
+  font-size: 0.78rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.story-panel-btn:hover:not(:disabled),
+.story-panel-btn:focus:not(:disabled) {
+  background: #2c3660;
+  border-color: #5669a6;
+  outline: none;
+}
+
+.story-panel-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.story-panel-btn.danger {
+  color: #ffd6db;
+  border-color: #6d3c52;
+  background: #422235;
+}
+
+.story-panel-btn.danger:hover:not(:disabled),
+.story-panel-btn.danger:focus:not(:disabled) {
+  background: #5b2b43;
+  border-color: #9f4b6a;
+}

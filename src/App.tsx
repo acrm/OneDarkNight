@@ -1,12 +1,11 @@
 import './App.css';
-import { useSyncExternalStore } from 'react';
+import { useEffect, useMemo, useSyncExternalStore } from 'react';
 import { useGameStore } from './application/gameStore';
+import { useStoryLibraryStore } from './application/storyLibraryStore';
 import { GamePage } from './presentation/pages/GamePage';
 import { DevtoolsPage } from './presentation/pages/DevtoolsPage';
 
 type AppRoute = 'game' | 'edit';
-
-const DEMO_STORY_TITLE = 'One Dark Night';
 
 const getRoute = (): AppRoute => {
   const hash = window.location.hash || '#/';
@@ -20,15 +19,28 @@ const subscribeRoute = (onStoreChange: () => void): (() => void) => {
 
 function App() {
   const route = useSyncExternalStore(subscribeRoute, getRoute, () => 'game');
+  const stories = useStoryLibraryStore((state) => state.stories);
+  const activeStoryId = useStoryLibraryStore((state) => state.activeStoryId);
+  const activeStory = useMemo(
+    () => stories.find((story) => story.id === activeStoryId) ?? stories[0],
+    [stories, activeStoryId]
+  );
+
+  const activateStory = useGameStore((state) => state.activateStory);
   const restart = useGameStore((state) => state.restart);
   const isGameMode = route === 'game';
+
+  useEffect(() => {
+    if (!activeStory) return;
+    activateStory(activeStory.id, activeStory.templateId);
+  }, [activeStory, activateStory]);
 
   return (
     <div className="app">
       <header className="mobile-story-header">
         <div className="mobile-story-title-wrap">
           <span className="platform-name">Play My Story</span>
-          <h1 className="story-title">{DEMO_STORY_TITLE}</h1>
+          <h1 className="story-title">{activeStory?.title ?? 'Story'}</h1>
         </div>
         <div className="mobile-story-actions">
           {isGameMode ? (

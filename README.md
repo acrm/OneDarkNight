@@ -5,6 +5,9 @@ Mobile-first platform for creating interactive stories. The default loaded demo 
 ## Current Mechanics Snapshot
 - Platform shell with two modes: game and edit
 - Global mobile header: story title + Play/Edit toggle + restart in game mode
+- Story library persisted in localStorage
+- Built-in templates: `One Dark Night` and `Metro: Last Train`
+- In edit mode you can create, rename, and delete user stories (based on a template)
 - Mixed consequence model: instant fatal, deferred fatal, escalation, reversible branch
 - TV night system with horror broadcasts and entity breach scenes
 - Rule-driven nights: peephole, bathroom mirror window, TV lockout behavior
@@ -28,6 +31,7 @@ npm run bump:build -- --desc "description"  # version bump
 
 ## Sprite Atlas Devtool
 - Open `#/edit` in the app (legacy alias `#/devtools` still works).
+- Top story panel in edit mode controls active story and user-story management.
 - Upload atlas image (PNG/JPG/WebP), then use zoom and pan to position the view on desktop and mobile.
 - Sprite list starts empty: add a sprite, set name, frame count, frame width and frame height, then confirm.
 - After confirmation, atlas displays one anchor marker per frame for the sprite.

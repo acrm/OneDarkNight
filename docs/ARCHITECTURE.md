@@ -6,17 +6,23 @@ Default bundled demo story: **One Dark Night**.
 
 | Layer | Path | Responsibility |
 |-------|------|----------------|
-| Domain | `src/domain/` | Types, scene data, structured rules, house map, item taxonomy. Pure TS. |
-| Application | `src/application/` | Zustand game store + consequence engine + threat progression |
+| Domain | `src/domain/` | Types, scene data, structured rules, house map, item taxonomy, story templates. Pure TS. |
+| Application | `src/application/` | Zustand game store + consequence engine + threat progression + story library |
 | Infrastructure | `src/infrastructure/` | localStorage adapter |
-| Presentation | `src/presentation/` | React components/pages (room context, threat feedback, TV panel) |
+| Presentation | `src/presentation/` | React components/pages (room context, threat feedback, TV panel, story editor panel) |
+
+## Story Layering
+
+- `src/domain/storyTemplates.ts`: canonical templates (`one-dark-night`, `metro-last-train`), initial state and scene maps.
+- `src/application/storyLibraryStore.ts`: persisted list of stories (built-in + user), active story selection, create/rename/delete operations.
+- `src/application/gameStore.ts`: per-story runtime snapshots and scene progression based on active template.
 
 ## Developer Tooling Slice
 
 - `src/application/devtoolsStore.ts`: isolated Zustand persist state for atlas tooling.
 - `src/application/devtoolsTypes.ts`: data contracts for atlas config, sprites, and export schema.
 - `src/application/spriteAtlasUtils.ts`: frame slicing, frame sequence parsing, background color-key removal, export mapping.
-- `src/presentation/pages/DevtoolsPage.tsx`: separate hash-routed editor page (`#/edit`, legacy `#/devtools`) for sprite atlas workflow.
+- `src/presentation/pages/DevtoolsPage.tsx`: separate hash-routed editor page (`#/edit`, legacy `#/devtools`) for story + atlas workflow.
 
 The tooling slice is isolated from the game state (`useGameStore`) and does not alter gameplay domain logic.
 

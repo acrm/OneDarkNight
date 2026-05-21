@@ -1,9 +1,14 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { GameState, ThreatStage } from '../domain/types';
-import { sceneMap } from '../domain/scenes';
+import type { StoryTemplateId } from '../domain/storyTemplates';
+import { getStoryTemplate } from '../domain/storyTemplates';
 
 interface GameStore extends GameState {
+  activeStoryId: string;
+  activeTemplateId: StoryTemplateId;
+  storySnapshots: Record<string, GameState>;
+  activateStory: (storyId: string, templateId: StoryTemplateId) => void;
   startGame: () => void;
   makeChoice: (choiceId: string) => void;
   restart: () => void;
@@ -20,28 +25,77 @@ const toThreatStage = (threatLevel: number): ThreatStage => {
   return 'calm';
 };
 
-const initialState: GameState = {
-  day: 1,
-  time: 'morning',
-  alive: true,
-  won: false,
-  inventory: ['деньги (500р)', 'тетрадь с правилами'],
-  flags: {},
-  threatLevel: 0,
-  threatStage: 'calm',
-  doomCounter: 0,
-  currentRoomId: 'kitchen',
-  consequenceLog: [],
-  currentSceneId: 'd1_start',
+const DEFAULT_STORY_ID = 'story-one-dark-night';
+const DEFAULT_TEMPLATE_ID: StoryTemplateId = 'one-dark-night';
+
+const cloneGameState = (state: GameState): GameState => ({
+  ...state,
+  inventory: [...state.inventory],
+  flags: { ...state.flags },
+  consequenceLog: [...state.consequenceLog],
+});
+
+const createInitialState = (templateId: StoryTemplateId): GameState => {
+  const { initialState } = getStoryTemplate(templateId);
+  return cloneGameState(initialState);
 };
+
+const toGameStateSnapshot = (state: GameStore): GameState => ({
+  day: state.day,
+  time: state.time,
+  alive: state.alive,
+  won: state.won,
+  inventory: [...state.inventory],
+  flags: { ...state.flags },
+  threatLevel: state.threatLevel,
+  threatStage: state.threatStage,
+  doomCounter: state.doomCounter,
+  currentRoomId: state.currentRoomId,
+  consequenceLog: [...state.consequenceLog],
+  currentSceneId: state.currentSceneId,
+});
+
+const defaultState = createInitialState(DEFAULT_TEMPLATE_ID);
 
 export const useGameStore = create<GameStore>()(
   persist(
     (set, get) => ({
-      ...initialState,
-      startGame: () => set({ ...initialState }),
+      ...defaultState,
+      activeStoryId: DEFAULT_STORY_ID,
+      activeTemplateId: DEFAULT_TEMPLATE_ID,
+      storySnapshots: { [DEFAULT_STORY_ID]: defaultState },
+      activateStory: (storyId: string, templateId: StoryTemplateId) => {
+        set((state) => {
+          const currentSnapshot = toGameStateSnapshot(state);
+          const snapshots = {
+            ...state.storySnapshots,
+            [state.activeStoryId]: currentSnapshot,
+          };
+
+          const targetSnapshot = snapshots[storyId] ?? createInitialState(templateId);
+          snapshots[storyId] = cloneGameState(targetSnapshot);
+
+          return {
+            ...cloneGameState(targetSnapshot),
+            activeStoryId: storyId,
+            activeTemplateId: templateId,
+            storySnapshots: snapshots,
+          };
+        });
+      },
+      startGame: () => set((state) => {
+        const resetState = createInitialState(state.activeTemplateId);
+        return {
+          ...resetState,
+          storySnapshots: {
+            ...state.storySnapshots,
+            [state.activeStoryId]: resetState,
+          },
+        };
+      }),
       makeChoice: (choiceId: string) => {
         const state = get();
+        const sceneMap = getStoryTemplate(state.activeTemplateId).sceneMap;
         const scene = sceneMap.get(state.currentSceneId);
         if (!scene) return;
         const choice = scene.choices.find((c) => c.id === choiceId);
@@ -82,7 +136,7 @@ export const useGameStore = create<GameStore>()(
         const resolvedSceneId = deferredFatal ? 'd5_mirror_payoff' : nextSceneId;
         const resolvedScene = sceneMap.get(resolvedSceneId);
 
-        set({
+        const nextGameState: GameState = {
           inventory: newInventory,
           flags: newFlags,
           threatLevel: nextThreatLevel,
@@ -95,14 +149,61 @@ export const useGameStore = create<GameStore>()(
           currentRoomId: choice.moveToRoom ?? resolvedScene?.roomId ?? state.currentRoomId,
           alive: forcedFatal ? false : resolvedScene?.isGameOver ? false : true,
           won: resolvedScene?.isVictory ?? false,
-        });
+        };
+
+        set((previousState) => ({
+          ...nextGameState,
+          storySnapshots: {
+            ...previousState.storySnapshots,
+            [previousState.activeStoryId]: cloneGameState(nextGameState),
+          },
+        }));
       },
-      restart: () => set({ ...initialState }),
+      restart: () => set((state) => {
+        const resetState = createInitialState(state.activeTemplateId);
+        return {
+          ...resetState,
+          storySnapshots: {
+            ...state.storySnapshots,
+            [state.activeStoryId]: resetState,
+          },
+        };
+      }),
     }),
     {
-      name: 'one-dark-night-save',
-      version: 2,
-      migrate: (persistedState) => ({ ...initialState, ...(persistedState as Partial<GameStore>) }),
+      name: 'play-my-story-save',
+      version: 3,
+      migrate: (persistedState) => {
+        const persisted = persistedState as Partial<GameStore>;
+
+        const legacyLooksLikeGameState = typeof persisted?.currentSceneId === 'string';
+        if (legacyLooksLikeGameState) {
+          const legacySnapshot: GameState = {
+            ...defaultState,
+            ...(persisted as Partial<GameState>),
+          };
+          return {
+            ...legacySnapshot,
+            activeStoryId: DEFAULT_STORY_ID,
+            activeTemplateId: DEFAULT_TEMPLATE_ID,
+            storySnapshots: {
+              [DEFAULT_STORY_ID]: cloneGameState(legacySnapshot),
+            },
+          } as Partial<GameStore>;
+        }
+
+        const activeStoryId = persisted.activeStoryId || DEFAULT_STORY_ID;
+        const activeTemplateId = persisted.activeTemplateId || DEFAULT_TEMPLATE_ID;
+        const snapshots = persisted.storySnapshots ?? { [DEFAULT_STORY_ID]: defaultState };
+        const activeSnapshot = snapshots[activeStoryId] ?? createInitialState(activeTemplateId);
+
+        return {
+          ...cloneGameState(activeSnapshot),
+          activeStoryId,
+          activeTemplateId,
+          storySnapshots: snapshots,
+        } as Partial<GameStore>;
+      },
     }
   )
 );

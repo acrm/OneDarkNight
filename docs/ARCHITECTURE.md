@@ -9,13 +9,13 @@ Default bundled demo story: **One Dark Night**.
 | Domain | `src/domain/` | Types, scene data, structured rules, house map, item taxonomy, story templates. Pure TS. |
 | Application | `src/application/` | Zustand game store + consequence engine + threat progression + story library |
 | Infrastructure | `src/infrastructure/` | localStorage adapter |
-| Presentation | `src/presentation/` | React components/pages (room context, threat feedback, TV panel, story editor panel) |
+| Presentation | `src/presentation/` | React components/pages (room context, threat feedback, TV panel, story selector, story structure editor) |
 
 ## Story Layering
 
 - `src/domain/storyTemplates.ts`: canonical templates (`one-dark-night`, `metro-last-train`), initial state and scene maps.
-- `src/application/storyLibraryStore.ts`: persisted list of stories (built-in + user), active story selection, create/rename/delete operations.
-- `src/application/gameStore.ts`: per-story runtime snapshots and scene progression based on active template.
+- `src/application/storyLibraryStore.ts`: persisted list of stories (built-in + user), active story selection, create/rename/delete operations, editable scene payloads.
+- `src/application/gameStore.ts`: per-story runtime snapshots and scene progression based on active edited scene set.
 
 ## Developer Tooling Slice
 

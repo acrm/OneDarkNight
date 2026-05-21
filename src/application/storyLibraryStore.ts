@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { StoryTemplateId } from '../domain/storyTemplates';
+import type { Scene } from '../domain/types';
+import { cloneScenes, getStoryTemplate, type StoryTemplateId } from '../domain/storyTemplates';
 
 export interface StoryLibraryEntry {
   id: string;
@@ -13,10 +14,14 @@ export interface StoryLibraryEntry {
 interface StoryLibraryStore {
   stories: StoryLibraryEntry[];
   activeStoryId: string;
+  customScenesByStoryId: Record<string, Scene[]>;
+  revisionByStoryId: Record<string, number>;
   setActiveStoryId: (id: string) => void;
   createStory: (title: string, templateId?: StoryTemplateId) => string;
   renameStory: (id: string, title: string) => void;
   deleteStory: (id: string) => void;
+  updateStoryScenes: (storyId: string, scenes: Scene[]) => void;
+  resetStoryScenes: (storyId: string) => void;
 }
 
 const BUILTIN_STORIES: StoryLibraryEntry[] = [
@@ -53,6 +58,14 @@ export const useStoryLibraryStore = create<StoryLibraryStore>()(
     (set, get) => ({
       stories: BUILTIN_STORIES,
       activeStoryId: 'story-one-dark-night',
+      customScenesByStoryId: {
+        'story-one-dark-night': cloneScenes(getStoryTemplate('one-dark-night').scenes),
+        'story-metro-last-train': cloneScenes(getStoryTemplate('metro-last-train').scenes),
+      },
+      revisionByStoryId: {
+        'story-one-dark-night': 1,
+        'story-metro-last-train': 1,
+      },
       setActiveStoryId: (id: string) => {
         const exists = get().stories.some((story) => story.id === id);
         if (!exists) return;
@@ -69,9 +82,18 @@ export const useStoryLibraryStore = create<StoryLibraryStore>()(
           isBuiltIn: false,
           createdAt: Date.now(),
         };
+        const initialScenes = cloneScenes(getStoryTemplate(templateId).scenes);
         set((state) => ({
           stories: [...state.stories, createdStory],
           activeStoryId: id,
+          customScenesByStoryId: {
+            ...state.customScenesByStoryId,
+            [id]: initialScenes,
+          },
+          revisionByStoryId: {
+            ...state.revisionByStoryId,
+            [id]: 1,
+          },
         }));
         return id;
       },
@@ -91,15 +113,51 @@ export const useStoryLibraryStore = create<StoryLibraryStore>()(
         if (!story || story.isBuiltIn) return;
         const nextStories = state.stories.filter((item) => item.id !== id);
         const fallbackStory = nextStories[0] ?? BUILTIN_STORIES[0];
+        const nextCustomScenesByStoryId = { ...state.customScenesByStoryId };
+        const nextRevisionByStoryId = { ...state.revisionByStoryId };
+        delete nextCustomScenesByStoryId[id];
+        delete nextRevisionByStoryId[id];
+
         set({
           stories: ensureBuiltInStories(nextStories),
           activeStoryId: state.activeStoryId === id ? fallbackStory.id : state.activeStoryId,
+          customScenesByStoryId: nextCustomScenesByStoryId,
+          revisionByStoryId: nextRevisionByStoryId,
+        });
+      },
+      updateStoryScenes: (storyId: string, scenes: Scene[]) => {
+        set((state) => ({
+          customScenesByStoryId: {
+            ...state.customScenesByStoryId,
+            [storyId]: cloneScenes(scenes),
+          },
+          revisionByStoryId: {
+            ...state.revisionByStoryId,
+            [storyId]: (state.revisionByStoryId[storyId] ?? 0) + 1,
+          },
+        }));
+      },
+      resetStoryScenes: (storyId: string) => {
+        set((state) => {
+          const story = state.stories.find((item) => item.id === storyId);
+          if (!story) return state;
+          const resetScenes = cloneScenes(getStoryTemplate(story.templateId).scenes);
+          return {
+            customScenesByStoryId: {
+              ...state.customScenesByStoryId,
+              [storyId]: resetScenes,
+            },
+            revisionByStoryId: {
+              ...state.revisionByStoryId,
+              [storyId]: (state.revisionByStoryId[storyId] ?? 0) + 1,
+            },
+          };
         });
       },
     }),
     {
       name: 'play-my-story-library',
-      version: 1,
+      version: 2,
       migrate: (persistedState) => {
         const incoming = persistedState as Partial<StoryLibraryStore> | undefined;
         const stories = ensureBuiltInStories(incoming?.stories ?? BUILTIN_STORIES);
@@ -107,9 +165,21 @@ export const useStoryLibraryStore = create<StoryLibraryStore>()(
           ? (incoming?.activeStoryId as string)
           : 'story-one-dark-night';
 
+        const incomingScenes = incoming?.customScenesByStoryId ?? {};
+        const customScenesByStoryId: Record<string, Scene[]> = {};
+        const revisionByStoryId: Record<string, number> = {};
+
+        for (const story of stories) {
+          const fallbackScenes = cloneScenes(getStoryTemplate(story.templateId).scenes);
+          customScenesByStoryId[story.id] = cloneScenes(incomingScenes[story.id] ?? fallbackScenes);
+          revisionByStoryId[story.id] = incoming?.revisionByStoryId?.[story.id] ?? 1;
+        }
+
         return {
           stories,
           activeStoryId,
+          customScenesByStoryId,
+          revisionByStoryId,
         } as Partial<StoryLibraryStore>;
       },
     }

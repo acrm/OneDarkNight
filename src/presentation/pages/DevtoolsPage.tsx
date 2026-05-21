@@ -3,6 +3,7 @@ import { useDevtoolsStore } from '../../application/devtoolsStore';
 import { clampPositiveInt, toAtlasDocument } from '../../application/spriteAtlasUtils';
 import type { AtlasDocument, SpriteDefinition } from '../../application/devtoolsTypes';
 import { StoryEditorPanel } from '../components/StoryEditorPanel';
+import { StoryStructureEditor } from '../components/StoryStructureEditor';
 import './DevtoolsPage.css';
 
 type DragMode = 'pan' | 'anchor' | 'crosshair';
@@ -863,6 +864,7 @@ export function DevtoolsPage() {
   return (
     <div className="devtools-page">
       <StoryEditorPanel />
+      <StoryStructureEditor />
       <div className="devtools-header">
         <div className="devtools-header-controls">
           <label className="devtools-file-btn">

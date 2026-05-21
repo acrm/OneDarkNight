@@ -9,10 +9,27 @@ export interface StoryTemplate {
   title: string;
   description: string;
   initialState: GameState;
+  scenes: Scene[];
   sceneMap: Map<string, Scene>;
 }
 
 const createSceneMap = (scenes: Scene[]): Map<string, Scene> => new Map(scenes.map((scene) => [scene.id, scene]));
+
+const cloneChoice = (choice: Scene['choices'][number]): Scene['choices'][number] => ({
+  ...choice,
+  setFlags: choice.setFlags ? { ...choice.setFlags } : undefined,
+  addItems: choice.addItems ? [...choice.addItems] : undefined,
+  removeItems: choice.removeItems ? [...choice.removeItems] : undefined,
+  clearFlags: choice.clearFlags ? [...choice.clearFlags] : undefined,
+});
+
+export const cloneScenes = (scenes: Scene[]): Scene[] => scenes.map((scene) => ({
+  ...scene,
+  text: [...scene.text],
+  choices: scene.choices.map(cloneChoice),
+  nearbyRooms: scene.nearbyRooms ? [...scene.nearbyRooms] : undefined,
+  tvEvent: scene.tvEvent ? { ...scene.tvEvent } : undefined,
+}));
 
 const oneDarkNightInitialState: GameState = {
   day: 1,
@@ -50,6 +67,7 @@ const STORY_TEMPLATES: Record<StoryTemplateId, StoryTemplate> = {
     title: 'One Dark Night',
     description: 'Демо-история о выживании в доме с жесткими правилами.',
     initialState: oneDarkNightInitialState,
+    scenes: allScenes,
     sceneMap: createSceneMap(allScenes),
   },
   'metro-last-train': {
@@ -57,6 +75,7 @@ const STORY_TEMPLATES: Record<StoryTemplateId, StoryTemplate> = {
     title: 'Metro: Last Train',
     description: 'Короткая демо-история о ночной поездке в последнем вагоне.',
     initialState: metroLastTrainInitialState,
+    scenes: metroLastTrainScenes,
     sceneMap: createSceneMap(metroLastTrainScenes),
   },
 };

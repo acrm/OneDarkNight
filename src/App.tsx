@@ -2,6 +2,7 @@ import './App.css';
 import { useEffect, useMemo, useSyncExternalStore } from 'react';
 import { useGameStore } from './application/gameStore';
 import { useStoryLibraryStore } from './application/storyLibraryStore';
+import { getStoryTemplate } from './domain/storyTemplates';
 import { GamePage } from './presentation/pages/GamePage';
 import { DevtoolsPage } from './presentation/pages/DevtoolsPage';
 
@@ -21,10 +22,17 @@ function App() {
   const route = useSyncExternalStore(subscribeRoute, getRoute, () => 'game');
   const stories = useStoryLibraryStore((state) => state.stories);
   const activeStoryId = useStoryLibraryStore((state) => state.activeStoryId);
+  const customScenesByStoryId = useStoryLibraryStore((state) => state.customScenesByStoryId);
+  const revisionByStoryId = useStoryLibraryStore((state) => state.revisionByStoryId);
   const activeStory = useMemo(
     () => stories.find((story) => story.id === activeStoryId) ?? stories[0],
     [stories, activeStoryId]
   );
+  const activeStoryScenes = useMemo(() => {
+    if (!activeStory) return [];
+    return customScenesByStoryId[activeStory.id] ?? getStoryTemplate(activeStory.templateId).scenes;
+  }, [activeStory, customScenesByStoryId]);
+  const activeStoryRevision = activeStory ? (revisionByStoryId[activeStory.id] ?? 0) : 0;
 
   const activateStory = useGameStore((state) => state.activateStory);
   const restart = useGameStore((state) => state.restart);
@@ -32,8 +40,8 @@ function App() {
 
   useEffect(() => {
     if (!activeStory) return;
-    activateStory(activeStory.id, activeStory.templateId);
-  }, [activeStory, activateStory]);
+    activateStory(activeStory.id, activeStory.templateId, activeStoryScenes);
+  }, [activeStory, activeStoryScenes, activeStoryRevision, activateStory]);
 
   return (
     <div className="app">

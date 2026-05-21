@@ -22,3 +22,4 @@
 - 2026w15-0.20 — make atlas preview 50vh, add sprite playback controls, add bulk delete mode in sprite list
 - 2026w15-0.21 — rebrand to Play My Story with global mobile game-edit header
 - 2026w15-0.22 — add multi-story library with persistent story sessions and edit-mode story management
+- 2026w15-0.23 — add full story structure editor in edit mode and play edited story flow

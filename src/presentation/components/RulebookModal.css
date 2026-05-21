@@ -15,9 +15,9 @@
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: 10px;
-  padding: 1rem 1rem 0.9rem;
   position: relative;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+  padding: 0.85rem 0.85rem 0.8rem;
 }
 
 .rulebook-close {
@@ -41,8 +41,8 @@
 }
 
 .rulebook-header {
-  padding-right: 2.5rem;
   margin-bottom: 0.85rem;
+  padding-right: 2.2rem;
 }
 
 .rulebook-kicker {
@@ -80,9 +80,10 @@
 .rulebook-footer {
   margin-top: 0.85rem;
   display: flex;
-  align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
+  flex-direction: column;
+  align-items: stretch;
 }
 
 .rulebook-nav-btn {
@@ -111,23 +112,5 @@
 .rulebook-page-indicator {
   color: var(--text-dim);
   font-size: 0.86rem;
-}
-
-@media (max-width: 600px) {
-  .rulebook-modal {
-    padding: 0.85rem 0.85rem 0.8rem;
-  }
-
-  .rulebook-header {
-    padding-right: 2.2rem;
-  }
-
-  .rulebook-footer {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .rulebook-page-indicator {
-    text-align: center;
-  }
+  text-align: center;
 }

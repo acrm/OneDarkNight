@@ -1,14 +1,16 @@
-# One Dark Night
+# Play My Story
 
-A horror text-adventure PWA. Survive 5 nights in a house with hidden rules.
+Mobile-first platform for creating interactive stories. The default loaded demo story is **One Dark Night**.
 
 ## Current Mechanics Snapshot
+- Platform shell with two modes: game and edit
+- Global mobile header: story title + Play/Edit toggle + restart in game mode
 - Mixed consequence model: instant fatal, deferred fatal, escalation, reversible branch
 - TV night system with horror broadcasts and entity breach scenes
 - Rule-driven nights: peephole, bathroom mirror window, TV lockout behavior
 - Day resource loop (salt/food/random items) impacting night choices
 - Room context UI (current room + nearby rooms)
-- Built-in Sprite Atlas Devtool for animation prep (developer-facing)
+- Built-in editor route (`#/edit`) currently powered by the Sprite Atlas tool
 
 ## Setup
 ```bash
@@ -25,7 +27,7 @@ npm run bump:build -- --desc "description"  # version bump
 ```
 
 ## Sprite Atlas Devtool
-- Open `#/devtools` in the app or use the `Devtool` badge from the game header.
+- Open `#/edit` in the app (legacy alias `#/devtools` still works).
 - Upload atlas image (PNG/JPG/WebP), then use zoom and pan to position the view on desktop and mobile.
 - Sprite list starts empty: add a sprite, set name, frame count, frame width and frame height, then confirm.
 - After confirmation, atlas displays one anchor marker per frame for the sprite.

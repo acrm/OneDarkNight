@@ -1,1 +1,77 @@
-.app { min-height: 100vh; display: flex; flex-direction: column; }
+.app {
+	min-height: 100vh;
+	display: flex;
+	flex-direction: column;
+	background: var(--bg-deep);
+}
+
+.mobile-story-header {
+	position: sticky;
+	top: 0;
+	z-index: 30;
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	gap: 0.6rem;
+	padding: 0.65rem 0.75rem;
+	border-bottom: 1px solid var(--border);
+	background: #111322;
+}
+
+.mobile-story-title-wrap {
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+}
+
+.platform-name {
+	font-size: 0.64rem;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	color: var(--text-dim);
+}
+
+.story-title {
+	margin: 0.08rem 0 0;
+	font-size: 0.95rem;
+	line-height: 1.2;
+	color: var(--text-primary);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.mobile-story-actions {
+	display: flex;
+	align-items: center;
+	gap: 0.4rem;
+	flex-shrink: 0;
+}
+
+.header-icon-btn {
+	width: 34px;
+	height: 34px;
+	border-radius: 8px;
+	border: 1px solid var(--border);
+	background: var(--btn-bg);
+	color: #dce4ff;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	text-decoration: none;
+	cursor: pointer;
+}
+
+.header-icon-btn:hover,
+.header-icon-btn:focus {
+	background: var(--btn-hover);
+	border-color: #4b5f95;
+	outline: none;
+}
+
+.app-content {
+	flex: 1;
+	min-height: 0;
+	display: flex;
+	flex-direction: column;
+}

@@ -1,4 +1,4 @@
-# Game Logic — One Dark Night
+# Game Logic — One Dark Night (Play My Story Demo)
 
 ## Objective
 Survive 5 days without breaking the rules.

@@ -861,11 +861,7 @@ export function DevtoolsPage() {
 
   return (
     <div className="devtools-page">
-      <header className="devtools-header">
-        <div className="devtools-header-brand">
-          <a className="devtools-link subtle" href="#/">← В игру</a>
-          <h1 className="devtools-title">Atlas Devtool</h1>
-        </div>
+      <div className="devtools-header">
         <div className="devtools-header-controls">
           <label className="devtools-file-btn">
             PNG
@@ -883,7 +879,7 @@ export function DevtoolsPage() {
         <div className="devtools-header-actions">
           <button className="devtools-btn tiny danger" onClick={resetTool} type="button">Сброс</button>
         </div>
-      </header>
+      </div>
 
       {errorText ? <div className="devtools-error">{errorText}</div> : null}
 

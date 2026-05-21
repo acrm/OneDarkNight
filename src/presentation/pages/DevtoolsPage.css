@@ -1,6 +1,6 @@
 /* ─── Page shell ──────────────────────────────────────────────── */
 .devtools-page {
-  height: 100dvh;
+  height: 100%;
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -9,7 +9,7 @@
   font-family: inherit;
 }
 
-/* ─── Header ──────────────────────────────────────────────────── */
+/* ─── Toolbar ─────────────────────────────────────────────────── */
 .devtools-header {
   display: flex;
   align-items: center;
@@ -19,33 +19,6 @@
   padding: 0.35rem 1rem;
   background: #17172a;
   border-bottom: 1px solid #2a2a40;
-}
-
-.devtools-header-brand {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-}
-
-.devtools-link.subtle {
-  color: #7b7b9e;
-  text-decoration: none;
-  font-size: 0.85rem;
-  background: none;
-  border: none;
-  padding: 0;
-}
-
-.devtools-link.subtle:hover {
-  color: #c8c8f0;
-  background: none;
-}
-
-.devtools-title {
-  margin: 0;
-  font-size: 0.95rem;
-  white-space: nowrap;
-  color: #e8e8f8;
 }
 
 .devtools-header-controls {

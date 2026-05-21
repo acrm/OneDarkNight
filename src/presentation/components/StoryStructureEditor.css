@@ -145,6 +145,7 @@
 
 .scene-field input,
 .scene-field textarea,
+.scene-field select,
 .choice-row input,
 .choice-row select {
   width: 100%;
@@ -160,6 +161,36 @@
 .scene-field textarea {
   min-height: 78px;
   resize: vertical;
+}
+
+.scene-field-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.35rem;
+}
+
+.scene-compact-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  border: 1px dashed #40518a;
+  border-radius: 8px;
+  background: #1a2244;
+  padding: 0.4rem 0.5rem;
+}
+
+.scene-compact-id {
+  color: #a8bcff;
+  font-family: 'Courier New', monospace;
+  font-size: 0.76rem;
+}
+
+.scene-compact-title {
+  color: #dfe7ff;
+  font-size: 0.76rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .scene-select-delete-btn {

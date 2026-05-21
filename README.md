@@ -6,12 +6,13 @@ Mobile-first platform for creating interactive stories. The default loaded demo 
 - Platform shell with two modes: game and edit
 - Global mobile header: story title + Play/Edit toggle + restart in game mode
 - In edit mode story picker is in the top header under app title
-- Next to picker: story list manager (add, delete, rename, export, import)
+- Next to picker: story list manager (add, delete, rename, download, import)
 - Story library persisted in localStorage
 - Built-in templates: `One Dark Night` and `Metro: Last Train`
 - In edit mode you can create, rename, and delete user stories (based on a template)
 - In edit mode you can edit full scene structure (scene title/location/text + choices + transitions)
-- Scene editor supports drag-and-drop reorder, add scene, bulk delete mode and per-scene JSON code editing
+- Scene editor supports drag-and-drop reorder, add scene, bulk delete mode, and scene ID editing
+- During drag-and-drop the scene list collapses to one-line cards (scene ID + title)
 - Play mode launches the active edited story version immediately
 - Edit mode now has section switchers: `История` / `Иллюстрации` / `Мир`
 - When active story changes, the opened editor section reloads for that story

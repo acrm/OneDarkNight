@@ -129,7 +129,7 @@ export function StoryListManagerModal({ isOpen, onClose }: StoryListManagerModal
 
         <div className="story-list-transfer">
           <button type="button" className="story-list-btn" onClick={handleExport}>
-            <i className="fa-solid fa-file-export" /> Выгрузить
+            <i className="fa-solid fa-file-export" /> Скачать
           </button>
           <button type="button" className="story-list-btn" onClick={handleImportClick}>
             <i className="fa-solid fa-file-import" /> Загрузить

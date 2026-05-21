@@ -23,6 +23,7 @@ Default bundled demo story: **One Dark Night**.
 - `src/application/devtoolsTypes.ts`: data contracts for atlas config, sprites, and export schema.
 - `src/application/spriteAtlasUtils.ts`: frame slicing, frame sequence parsing, background color-key removal, export mapping.
 - `src/presentation/pages/DevtoolsPage.tsx`: separate hash-routed editor page (`#/edit`, legacy `#/devtools`) with switchable sections for scene editing, illustrations atlas, and world notes.
+- Scene editor supports scene ID editing, add scene, bulk delete workflow, and compact drag reorder view.
 
 The tooling slice is isolated from the game state (`useGameStore`) and does not alter gameplay domain logic.
 

@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useStoryLibraryStore } from '../../application/storyLibraryStore';
 import { cloneScenes, getStoryTemplate } from '../../domain/storyTemplates';
-import type { Choice, Scene } from '../../domain/types';
+import type { Choice, DayNumber, Scene, TimeOfDay } from '../../domain/types';
 import './StoryStructureEditor.css';
 
 const toLines = (text: string[]): string => text.join('\n');
+
+const TIME_OPTIONS: TimeOfDay[] = ['morning', 'afternoon', 'evening', 'night', 'latenight'];
 
 const toSceneText = (value: string): string[] => {
   const normalized = value.replace(/\r\n/g, '\n').split('\n').map((line) => line.trimEnd());
@@ -38,30 +40,24 @@ export function StoryStructureEditor() {
   const [isDeleteMode, setDeleteMode] = useState(false);
   const [selectedSceneIds, setSelectedSceneIds] = useState<Set<string>>(new Set());
   const [dragSceneId, setDragSceneId] = useState<string | null>(null);
-  const [codeDraftBySceneId, setCodeDraftBySceneId] = useState<Record<string, string>>({});
 
   useEffect(() => {
-    const nextDrafts: Record<string, string> = {};
-    for (const scene of scenes) {
-      nextDrafts[scene.id] = JSON.stringify(scene, null, 2);
-    }
-    setCodeDraftBySceneId(nextDrafts);
     setDeleteMode(false);
     setSelectedSceneIds(new Set());
     setDragSceneId(null);
   }, [activeStory?.id]);
 
+  const isDraggingList = dragSceneId !== null;
+
+  const updateAllScenes = (nextScenes: Scene[]) => {
+    if (!activeStory) return;
+    updateStoryScenes(activeStory.id, nextScenes);
+  };
+
   const patchScene = (sceneId: string, mapper: (scene: Scene) => Scene) => {
     if (!activeStory) return;
     const nextScenes = scenes.map((scene) => (scene.id === sceneId ? mapper(scene) : scene));
-    updateStoryScenes(activeStory.id, nextScenes);
-    const changedScene = nextScenes.find((scene) => scene.id === sceneId);
-    if (changedScene) {
-      setCodeDraftBySceneId((state) => ({
-        ...state,
-        [sceneId]: JSON.stringify(changedScene, null, 2),
-      }));
-    }
+    updateAllScenes(nextScenes);
   };
 
   const patchChoice = (sceneId: string, choiceId: string, mapper: (choice: Choice) => Choice) => {
@@ -112,12 +108,30 @@ export function StoryStructureEditor() {
       text: ['Текст новой сцены.'],
       choices: [],
     };
-    const nextScenes = [...scenes, newScene];
-    updateStoryScenes(activeStory.id, nextScenes);
-    setCodeDraftBySceneId((state) => ({
-      ...state,
-      [id]: JSON.stringify(newScene, null, 2),
-    }));
+    updateAllScenes([...scenes, newScene]);
+  };
+
+  const renameSceneId = (sceneId: string, nextIdRaw: string) => {
+    const nextId = nextIdRaw.trim();
+    if (!nextId || nextId === sceneId) return;
+    if (sceneIds.includes(nextId)) {
+      alert('Сцена с таким кодом уже существует.');
+      return;
+    }
+
+    const nextScenes = scenes.map((scene) => {
+      if (scene.id === sceneId) {
+        return { ...scene, id: nextId };
+      }
+      return {
+        ...scene,
+        choices: scene.choices.map((choice) => ({
+          ...choice,
+          nextSceneId: choice.nextSceneId === sceneId ? nextId : choice.nextSceneId,
+        })),
+      };
+    });
+    updateAllScenes(nextScenes);
   };
 
   const toggleSceneSelection = (sceneId: string) => {
@@ -144,7 +158,7 @@ export function StoryStructureEditor() {
         nextSceneId: selectedSceneIds.has(choice.nextSceneId) ? fallbackSceneId : choice.nextSceneId,
       })),
     }));
-    updateStoryScenes(activeStory.id, normalized);
+    updateAllScenes(normalized);
     setDeleteMode(false);
     setSelectedSceneIds(new Set());
   };
@@ -157,21 +171,7 @@ export function StoryStructureEditor() {
     const nextScenes = [...scenes];
     const [moved] = nextScenes.splice(fromIndex, 1);
     nextScenes.splice(toIndex, 0, moved);
-    updateStoryScenes(activeStory.id, nextScenes);
-  };
-
-  const applySceneCode = (sceneId: string) => {
-    const source = codeDraftBySceneId[sceneId];
-    if (!source) return;
-    try {
-      const parsed = JSON.parse(source) as Scene;
-      if (!parsed || typeof parsed !== 'object' || !Array.isArray(parsed.choices) || !Array.isArray(parsed.text) || typeof parsed.id !== 'string') {
-        throw new Error('invalid');
-      }
-      patchScene(sceneId, () => ({ ...parsed, id: sceneId }));
-    } catch {
-      alert('Ошибка JSON кода сцены. Проверьте синтаксис и обязательные поля.');
-    }
+    updateAllScenes(nextScenes);
   };
 
   if (!activeStory) return null;
@@ -237,6 +237,14 @@ export function StoryStructureEditor() {
               <span className="scene-time">Day {scene.day} · {scene.time}</span>
             </div>
 
+            {isDraggingList ? (
+              <div className="scene-compact-row">
+                <span className="scene-compact-id">{scene.id}</span>
+                <span className="scene-compact-title">{scene.title || 'Без названия'}</span>
+              </div>
+            ) : (
+              <>
+
             {isDeleteMode ? (
               <button type="button" className="scene-select-delete-btn" onClick={() => toggleSceneSelection(scene.id)}>
                 <i className={`fa-solid ${selectedSceneIds.has(scene.id) ? 'fa-square-check' : 'fa-square'}`} />
@@ -245,12 +253,47 @@ export function StoryStructureEditor() {
             ) : null}
 
             <label className="scene-field">
+              <span>Код сцены</span>
+              <input
+                defaultValue={scene.id}
+                onBlur={(event) => renameSceneId(scene.id, event.target.value)}
+              />
+            </label>
+
+            <label className="scene-field">
               <span>Название сцены</span>
               <input
                 value={scene.title ?? ''}
                 onChange={(event) => patchScene(scene.id, (current) => ({ ...current, title: event.target.value }))}
               />
             </label>
+
+            <div className="scene-field-grid">
+              <label className="scene-field">
+                <span>Day</span>
+                <select
+                  value={scene.day}
+                  onChange={(event) => patchScene(scene.id, (current) => ({ ...current, day: Number(event.target.value) as DayNumber }))}
+                >
+                  <option value={1}>1</option>
+                  <option value={2}>2</option>
+                  <option value={3}>3</option>
+                  <option value={4}>4</option>
+                  <option value={5}>5</option>
+                </select>
+              </label>
+              <label className="scene-field">
+                <span>Время</span>
+                <select
+                  value={scene.time}
+                  onChange={(event) => patchScene(scene.id, (current) => ({ ...current, time: event.target.value as TimeOfDay }))}
+                >
+                  {TIME_OPTIONS.map((value) => (
+                    <option key={value} value={value}>{value}</option>
+                  ))}
+                </select>
+              </label>
+            </div>
 
             <label className="scene-field">
               <span>Локация</span>
@@ -313,21 +356,8 @@ export function StoryStructureEditor() {
               )}
             </div>
 
-            <div className="scene-code-editor">
-              <div className="scene-code-head">
-                <span>Код сцены (JSON)</span>
-                <button type="button" className="scene-code-apply-btn" onClick={() => applySceneCode(scene.id)}>
-                  Применить код
-                </button>
-              </div>
-              <textarea
-                value={codeDraftBySceneId[scene.id] ?? JSON.stringify(scene, null, 2)}
-                onChange={(event) => {
-                  const value = event.target.value;
-                  setCodeDraftBySceneId((state) => ({ ...state, [scene.id]: value }));
-                }}
-              />
-            </div>
+              </>
+            )}
           </article>
         ))}
       </div>

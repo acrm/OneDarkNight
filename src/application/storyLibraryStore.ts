@@ -17,6 +17,7 @@ export interface StoryLibraryImportPayload {
   customScenesByStoryId?: Record<string, Scene[]>;
   revisionByStoryId?: Record<string, number>;
   worldNotesByStoryId?: Record<string, string>;
+  sceneGroupNamesByStoryId?: Record<string, Record<string, string>>;
 }
 
 interface StoryLibraryStore {
@@ -25,6 +26,7 @@ interface StoryLibraryStore {
   customScenesByStoryId: Record<string, Scene[]>;
   revisionByStoryId: Record<string, number>;
   worldNotesByStoryId: Record<string, string>;
+  sceneGroupNamesByStoryId: Record<string, Record<string, string>>;
   setActiveStoryId: (id: string) => void;
   createStory: (title: string, templateId?: StoryTemplateId) => string;
   renameStory: (id: string, title: string) => void;
@@ -32,6 +34,7 @@ interface StoryLibraryStore {
   updateStoryScenes: (storyId: string, scenes: Scene[]) => void;
   resetStoryScenes: (storyId: string) => void;
   updateWorldNotes: (storyId: string, notes: string) => void;
+  updateSceneGroupName: (storyId: string, groupKey: string, name: string) => void;
   importLibrary: (payload: StoryLibraryImportPayload) => void;
 }
 
@@ -86,6 +89,10 @@ export const useStoryLibraryStore = create<StoryLibraryStore>()(
         'story-one-dark-night': '',
         'story-metro-last-train': '',
       },
+      sceneGroupNamesByStoryId: {
+        'story-one-dark-night': {},
+        'story-metro-last-train': {},
+      },
       setActiveStoryId: (id: string) => {
         const exists = get().stories.some((story) => story.id === id);
         if (!exists) return;
@@ -118,6 +125,10 @@ export const useStoryLibraryStore = create<StoryLibraryStore>()(
             ...state.worldNotesByStoryId,
             [id]: '',
           },
+          sceneGroupNamesByStoryId: {
+            ...state.sceneGroupNamesByStoryId,
+            [id]: {},
+          },
         }));
         return id;
       },
@@ -140,9 +151,11 @@ export const useStoryLibraryStore = create<StoryLibraryStore>()(
         const nextCustomScenesByStoryId = { ...state.customScenesByStoryId };
         const nextRevisionByStoryId = { ...state.revisionByStoryId };
         const nextWorldNotesByStoryId = { ...state.worldNotesByStoryId };
+        const nextSceneGroupNamesByStoryId = { ...state.sceneGroupNamesByStoryId };
         delete nextCustomScenesByStoryId[id];
         delete nextRevisionByStoryId[id];
         delete nextWorldNotesByStoryId[id];
+        delete nextSceneGroupNamesByStoryId[id];
 
         set({
           stories: ensureBuiltInStories(nextStories),
@@ -150,6 +163,7 @@ export const useStoryLibraryStore = create<StoryLibraryStore>()(
           customScenesByStoryId: nextCustomScenesByStoryId,
           revisionByStoryId: nextRevisionByStoryId,
           worldNotesByStoryId: nextWorldNotesByStoryId,
+          sceneGroupNamesByStoryId: nextSceneGroupNamesByStoryId,
         });
       },
       updateStoryScenes: (storyId: string, scenes: Scene[]) => {
@@ -189,6 +203,17 @@ export const useStoryLibraryStore = create<StoryLibraryStore>()(
           },
         }));
       },
+      updateSceneGroupName: (storyId: string, groupKey: string, name: string) => {
+        set((state) => ({
+          sceneGroupNamesByStoryId: {
+            ...state.sceneGroupNamesByStoryId,
+            [storyId]: {
+              ...(state.sceneGroupNamesByStoryId[storyId] ?? {}),
+              [groupKey]: name.trim().slice(0, 80),
+            },
+          },
+        }));
+      },
       importLibrary: (payload: StoryLibraryImportPayload) => {
         set(() => {
           const incomingStories = Array.isArray(payload?.stories) ? payload.stories : [];
@@ -207,6 +232,7 @@ export const useStoryLibraryStore = create<StoryLibraryStore>()(
           const customScenesByStoryId: Record<string, Scene[]> = {};
           const revisionByStoryId: Record<string, number> = {};
           const worldNotesByStoryId: Record<string, string> = {};
+          const sceneGroupNamesByStoryId: Record<string, Record<string, string>> = {};
 
           for (const story of normalizedStories) {
             const importedScenes = payload?.customScenesByStoryId?.[story.id];
@@ -214,6 +240,7 @@ export const useStoryLibraryStore = create<StoryLibraryStore>()(
             customScenesByStoryId[story.id] = cloneScenes(importedScenes && importedScenes.length > 0 ? importedScenes : fallbackScenes);
             revisionByStoryId[story.id] = Math.max(1, Number(payload?.revisionByStoryId?.[story.id] ?? 1));
             worldNotesByStoryId[story.id] = (payload?.worldNotesByStoryId?.[story.id] ?? '').slice(0, 8000);
+            sceneGroupNamesByStoryId[story.id] = payload?.sceneGroupNamesByStoryId?.[story.id] ?? {};
           }
 
           const activeStoryId = normalizedStories.some((story) => story.id === payload?.activeStoryId)
@@ -226,13 +253,14 @@ export const useStoryLibraryStore = create<StoryLibraryStore>()(
             customScenesByStoryId,
             revisionByStoryId,
             worldNotesByStoryId,
+            sceneGroupNamesByStoryId,
           };
         });
       },
     }),
     {
       name: 'play-my-story-library',
-      version: 3,
+      version: 4,
       migrate: (persistedState) => {
         const incoming = persistedState as Partial<StoryLibraryStore> | undefined;
         const stories = ensureBuiltInStories(incoming?.stories ?? BUILTIN_STORIES);
@@ -244,12 +272,14 @@ export const useStoryLibraryStore = create<StoryLibraryStore>()(
         const customScenesByStoryId: Record<string, Scene[]> = {};
         const revisionByStoryId: Record<string, number> = {};
         const worldNotesByStoryId: Record<string, string> = {};
+        const sceneGroupNamesByStoryId: Record<string, Record<string, string>> = {};
 
         for (const story of stories) {
           const fallbackScenes = cloneScenes(getStoryTemplate(story.templateId).scenes);
           customScenesByStoryId[story.id] = cloneScenes(incomingScenes[story.id] ?? fallbackScenes);
           revisionByStoryId[story.id] = incoming?.revisionByStoryId?.[story.id] ?? 1;
           worldNotesByStoryId[story.id] = incoming?.worldNotesByStoryId?.[story.id] ?? '';
+          sceneGroupNamesByStoryId[story.id] = incoming?.sceneGroupNamesByStoryId?.[story.id] ?? {};
         }
 
         return {
@@ -258,6 +288,7 @@ export const useStoryLibraryStore = create<StoryLibraryStore>()(
           customScenesByStoryId,
           revisionByStoryId,
           worldNotesByStoryId,
+          sceneGroupNamesByStoryId,
         } as Partial<StoryLibraryStore>;
       },
     }

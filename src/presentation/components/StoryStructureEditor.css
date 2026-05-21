@@ -91,6 +91,46 @@
   gap: 0.45rem;
 }
 
+.scene-group-card {
+  border: 1px solid #2b345b;
+  border-radius: 10px;
+  background: #141933;
+  padding: 0.45rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.scene-group-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.45rem;
+  border-bottom: 1px solid #2c3760;
+  padding-bottom: 0.35rem;
+}
+
+.scene-group-head h3 {
+  margin: 0;
+  font-size: 0.8rem;
+  color: #dbe6ff;
+}
+
+.scene-group-edit-btn {
+  height: 28px;
+  border: 1px solid #4965a9;
+  border-radius: 7px;
+  background: #243f76;
+  color: #e6eeff;
+  font-size: 0.7rem;
+  padding: 0 0.45rem;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-family: inherit;
+}
+
 .scene-editor-card {
   border: 1px solid #2d3355;
   border-radius: 10px;
@@ -114,18 +154,49 @@
 .scene-editor-meta {
   display: flex;
   justify-content: space-between;
+  align-items: center;
   gap: 0.4rem;
   font-size: 0.7rem;
 }
 
-.scene-id {
-  color: #a7b7ff;
-  font-family: 'Courier New', monospace;
+.scene-title-badge {
+  color: #dce5ff;
+  font-size: 0.76rem;
+  max-width: 60%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.scene-id i {
+.scene-title-badge i {
   margin-right: 0.3rem;
   color: #7f95d7;
+}
+
+.scene-id-edit-wrap {
+  margin-left: auto;
+}
+
+.scene-id-chip {
+  border: 1px solid #3b528f;
+  border-radius: 8px;
+  background: #203868;
+  color: #eaf1ff;
+  font-size: 0.72rem;
+  padding: 0.2rem 0.5rem;
+  font-family: 'Courier New', monospace;
+  cursor: pointer;
+}
+
+.scene-id-edit-input {
+  width: 150px;
+  border: 1px solid #5f79bd;
+  border-radius: 8px;
+  background: #253d72;
+  color: #f0f5ff;
+  font-size: 0.72rem;
+  padding: 0.24rem 0.45rem;
+  font-family: 'Courier New', monospace;
 }
 
 .scene-time {
@@ -191,6 +262,60 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.group-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(8, 11, 20, 0.72);
+  display: grid;
+  place-items: center;
+  z-index: 95;
+  padding: 1rem;
+}
+
+.group-modal {
+  width: min(420px, 100%);
+  border: 1px solid #3d4f84;
+  border-radius: 10px;
+  background: #171f3a;
+  padding: 0.7rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.group-modal h4 {
+  margin: 0;
+  font-size: 0.9rem;
+  color: #eef3ff;
+}
+
+.group-modal label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.group-modal label span {
+  font-size: 0.72rem;
+  color: #a0abd4;
+}
+
+.group-modal label input {
+  border: 1px solid #3f5087;
+  border-radius: 8px;
+  background: #23315b;
+  color: #eff4ff;
+  font-size: 0.82rem;
+  padding: 0.4rem 0.5rem;
+  font-family: inherit;
+}
+
+.group-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.35rem;
 }
 
 .scene-select-delete-btn {

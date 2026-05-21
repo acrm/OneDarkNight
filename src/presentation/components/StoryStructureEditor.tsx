@@ -1,12 +1,18 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useStoryLibraryStore } from '../../application/storyLibraryStore';
 import { cloneScenes, getStoryTemplate } from '../../domain/storyTemplates';
-import type { Choice, DayNumber, Scene, TimeOfDay } from '../../domain/types';
+import type { Choice, Scene, TimeOfDay } from '../../domain/types';
 import './StoryStructureEditor.css';
 
 const toLines = (text: string[]): string => text.join('\n');
 
-const TIME_OPTIONS: TimeOfDay[] = ['morning', 'afternoon', 'evening', 'night', 'latenight'];
+const TIME_LABELS: Record<TimeOfDay, string> = {
+  morning: 'Morning',
+  afternoon: 'Afternoon',
+  evening: 'Evening',
+  night: 'Night',
+  latenight: 'Late Night',
+};
 
 const toSceneText = (value: string): string[] => {
   const normalized = value.replace(/\r\n/g, '\n').split('\n').map((line) => line.trimEnd());
@@ -19,12 +25,24 @@ const createChoiceId = (scene: Scene): string => {
   return `c${nextIndex}_${Date.now().toString(36).slice(-4)}`;
 };
 
+const toGroupKey = (scene: Scene): string => `${scene.day}-${scene.time}`;
+
+const toDefaultGroupName = (scene: Scene): string => `Day${scene.day}. ${TIME_LABELS[scene.time]}`;
+
+interface SceneGroup {
+  key: string;
+  name: string;
+  scenes: Scene[];
+}
+
 export function StoryStructureEditor() {
   const stories = useStoryLibraryStore((state) => state.stories);
   const activeStoryId = useStoryLibraryStore((state) => state.activeStoryId);
   const customScenesByStoryId = useStoryLibraryStore((state) => state.customScenesByStoryId);
+  const sceneGroupNamesByStoryId = useStoryLibraryStore((state) => state.sceneGroupNamesByStoryId);
   const updateStoryScenes = useStoryLibraryStore((state) => state.updateStoryScenes);
   const resetStoryScenes = useStoryLibraryStore((state) => state.resetStoryScenes);
+  const updateSceneGroupName = useStoryLibraryStore((state) => state.updateSceneGroupName);
 
   const activeStory = useMemo(
     () => stories.find((story) => story.id === activeStoryId) ?? stories[0],
@@ -37,14 +55,42 @@ export function StoryStructureEditor() {
   }, [activeStory, customScenesByStoryId]);
 
   const sceneIds = useMemo(() => scenes.map((scene) => scene.id), [scenes]);
+  const sceneGroups = useMemo(() => {
+    const groupNames = activeStory ? (sceneGroupNamesByStoryId[activeStory.id] ?? {}) : {};
+    const groupMap = new Map<string, SceneGroup>();
+
+    for (const scene of scenes) {
+      const key = toGroupKey(scene);
+      const existing = groupMap.get(key);
+      if (existing) {
+        existing.scenes.push(scene);
+      } else {
+        groupMap.set(key, {
+          key,
+          name: groupNames[key] || toDefaultGroupName(scene),
+          scenes: [scene],
+        });
+      }
+    }
+    return [...groupMap.values()];
+  }, [activeStory, sceneGroupNamesByStoryId, scenes]);
+
   const [isDeleteMode, setDeleteMode] = useState(false);
   const [selectedSceneIds, setSelectedSceneIds] = useState<Set<string>>(new Set());
   const [dragSceneId, setDragSceneId] = useState<string | null>(null);
+  const [editingSceneId, setEditingSceneId] = useState<string | null>(null);
+  const [sceneIdDraft, setSceneIdDraft] = useState('');
+  const [editingGroupKey, setEditingGroupKey] = useState<string | null>(null);
+  const [groupNameDraft, setGroupNameDraft] = useState('');
 
   useEffect(() => {
     setDeleteMode(false);
     setSelectedSceneIds(new Set());
     setDragSceneId(null);
+    setEditingSceneId(null);
+    setSceneIdDraft('');
+    setEditingGroupKey(null);
+    setGroupNameDraft('');
   }, [activeStory?.id]);
 
   const isDraggingList = dragSceneId !== null;
@@ -134,6 +180,29 @@ export function StoryStructureEditor() {
     updateAllScenes(nextScenes);
   };
 
+  const openGroupEditor = (groupKey: string, currentName: string) => {
+    setEditingGroupKey(groupKey);
+    setGroupNameDraft(currentName);
+  };
+
+  const saveGroupName = () => {
+    if (!activeStory || !editingGroupKey) return;
+    updateSceneGroupName(activeStory.id, editingGroupKey, groupNameDraft || editingGroupKey);
+    setEditingGroupKey(null);
+    setGroupNameDraft('');
+  };
+
+  const beginSceneIdEdit = (sceneId: string) => {
+    setEditingSceneId(sceneId);
+    setSceneIdDraft(sceneId);
+  };
+
+  const commitSceneIdEdit = (sceneId: string) => {
+    renameSceneId(sceneId, sceneIdDraft);
+    setEditingSceneId(null);
+    setSceneIdDraft('');
+  };
+
   const toggleSceneSelection = (sceneId: string) => {
     setSelectedSceneIds((state) => {
       const next = new Set(state);
@@ -216,7 +285,15 @@ export function StoryStructureEditor() {
       </div>
 
       <div className="story-structure-list">
-        {scenes.map((scene) => (
+        {sceneGroups.map((group) => (
+          <section className="scene-group-card" key={group.key}>
+            <header className="scene-group-head">
+              <h3>{group.name}</h3>
+              <button type="button" className="scene-group-edit-btn" onClick={() => openGroupEditor(group.key, group.name)}>
+                <i className="fa-solid fa-pen" /> Редактировать группу
+              </button>
+            </header>
+            {group.scenes.map((scene) => (
           <article
             className={`scene-editor-card${dragSceneId === scene.id ? ' dragging' : ''}${selectedSceneIds.has(scene.id) ? ' marked-delete' : ''}`}
             key={scene.id}
@@ -230,13 +307,6 @@ export function StoryStructureEditor() {
             }}
             onDragEnd={() => setDragSceneId(null)}
           >
-            <div className="scene-editor-meta">
-              <span className="scene-id">
-                <i className="fa-solid fa-grip-vertical" /> {scene.id}
-              </span>
-              <span className="scene-time">Day {scene.day} · {scene.time}</span>
-            </div>
-
             {isDraggingList ? (
               <div className="scene-compact-row">
                 <span className="scene-compact-id">{scene.id}</span>
@@ -244,6 +314,37 @@ export function StoryStructureEditor() {
               </div>
             ) : (
               <>
+
+            <div className="scene-editor-meta">
+              <span className="scene-title-badge">
+                <i className="fa-solid fa-grip-vertical" /> {scene.title || 'Без названия'}
+              </span>
+              <span className="scene-id-edit-wrap">
+                {editingSceneId === scene.id ? (
+                  <input
+                    className="scene-id-edit-input"
+                    value={sceneIdDraft}
+                    autoFocus
+                    onChange={(event) => setSceneIdDraft(event.target.value)}
+                    onBlur={() => commitSceneIdEdit(scene.id)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter') {
+                        event.preventDefault();
+                        commitSceneIdEdit(scene.id);
+                      }
+                      if (event.key === 'Escape') {
+                        setEditingSceneId(null);
+                        setSceneIdDraft('');
+                      }
+                    }}
+                  />
+                ) : (
+                  <button type="button" className="scene-id-chip" onClick={() => beginSceneIdEdit(scene.id)}>
+                    {scene.id}
+                  </button>
+                )}
+              </span>
+            </div>
 
             {isDeleteMode ? (
               <button type="button" className="scene-select-delete-btn" onClick={() => toggleSceneSelection(scene.id)}>
@@ -253,47 +354,12 @@ export function StoryStructureEditor() {
             ) : null}
 
             <label className="scene-field">
-              <span>Код сцены</span>
-              <input
-                defaultValue={scene.id}
-                onBlur={(event) => renameSceneId(scene.id, event.target.value)}
-              />
-            </label>
-
-            <label className="scene-field">
               <span>Название сцены</span>
               <input
                 value={scene.title ?? ''}
                 onChange={(event) => patchScene(scene.id, (current) => ({ ...current, title: event.target.value }))}
               />
             </label>
-
-            <div className="scene-field-grid">
-              <label className="scene-field">
-                <span>Day</span>
-                <select
-                  value={scene.day}
-                  onChange={(event) => patchScene(scene.id, (current) => ({ ...current, day: Number(event.target.value) as DayNumber }))}
-                >
-                  <option value={1}>1</option>
-                  <option value={2}>2</option>
-                  <option value={3}>3</option>
-                  <option value={4}>4</option>
-                  <option value={5}>5</option>
-                </select>
-              </label>
-              <label className="scene-field">
-                <span>Время</span>
-                <select
-                  value={scene.time}
-                  onChange={(event) => patchScene(scene.id, (current) => ({ ...current, time: event.target.value as TimeOfDay }))}
-                >
-                  {TIME_OPTIONS.map((value) => (
-                    <option key={value} value={value}>{value}</option>
-                  ))}
-                </select>
-              </label>
-            </div>
 
             <label className="scene-field">
               <span>Локация</span>
@@ -359,8 +425,30 @@ export function StoryStructureEditor() {
               </>
             )}
           </article>
+            ))}
+          </section>
         ))}
       </div>
+
+      {editingGroupKey ? (
+        <div className="group-modal-backdrop" onClick={() => setEditingGroupKey(null)}>
+          <div className="group-modal" onClick={(event) => event.stopPropagation()}>
+            <h4>Редактирование группы</h4>
+            <label>
+              <span>Название группы</span>
+              <input
+                value={groupNameDraft}
+                onChange={(event) => setGroupNameDraft(event.target.value)}
+                placeholder="Day1. Morning"
+              />
+            </label>
+            <div className="group-modal-actions">
+              <button type="button" className="story-structure-btn" onClick={saveGroupName}>Сохранить</button>
+              <button type="button" className="story-structure-btn" onClick={() => setEditingGroupKey(null)}>Отмена</button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }

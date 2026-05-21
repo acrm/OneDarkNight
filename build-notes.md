@@ -26,3 +26,4 @@
 - 2026w15-0.24 — add editor section switchers and sync story/world editors with active story
 - 2026w15-0.25 — move story picker to header, add story list manager and advanced scene editor controls
 - 2026w15-0.26 — refine edit header story manager and scene editor drag/id UX
+- 2026w15-0.27 — add scene groups modal naming and inline scene code edit UX

@@ -13,6 +13,8 @@ Mobile-first platform for creating interactive stories. The default loaded demo 
 - In edit mode you can edit full scene structure (scene title/location/text + choices + transitions)
 - Scene editor supports drag-and-drop reorder, add scene, bulk delete mode, and scene ID editing
 - During drag-and-drop the scene list collapses to one-line cards (scene ID + title)
+- Scenes are displayed inside editable groups (e.g. `Day1. Morning`) with a group-name modal editor
+- Scene ID (code) is edited inline by clicking the code chip in the scene header
 - Play mode launches the active edited story version immediately
 - Edit mode now has section switchers: `История` / `Иллюстрации` / `Мир`
 - When active story changes, the opened editor section reloads for that story
